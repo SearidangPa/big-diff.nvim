@@ -230,7 +230,7 @@ vim.keymap.set('n', '<leader>tg', M.toggle, { desc = '[T]oggle [G]rapple float d
 -- toggle automatically on startup
 M.setup = function()
 	vim.schedule(M.show)
-	require('butterfly.jumplist_float')
+	require('butterfly.changelist_float')
 end
 
 return M
