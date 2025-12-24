@@ -68,6 +68,8 @@ local function get_jumplist_entries()
 		return { ' No jumps' }, {}
 	end
 
+	local current_buf = vim.api.nvim_get_current_buf()
+	local cursor_lnum = vim.api.nvim_win_get_cursor(0)[1]
 	local cwd = vim.fn.getcwd() .. '/'
 
 	local backward_jumps = {}
@@ -83,9 +85,10 @@ local function get_jumplist_entries()
 	local start_idx = math.max(1, #backward_jumps - 3)
 	local entries = {}
 	for i = start_idx, #backward_jumps do
+		local jump = backward_jumps[i]
 		table.insert(entries, {
-			jump = backward_jumps[i],
-			is_next = (i == #backward_jumps),
+			jump = jump,
+			is_current = (jump.bufnr == current_buf and jump.lnum == cursor_lnum),
 		})
 	end
 
@@ -129,7 +132,7 @@ local function get_jumplist_entries()
 			line = line_idx,
 			col_start = label_len + 1,
 			col_end = #line,
-			hl = entry.is_next and 'JumpCurrent' or 'Comment',
+			hl = entry.is_current and 'JumpCurrent' or 'Comment',
 		})
 	end
 
@@ -263,8 +266,10 @@ function M.jump_to(letter)
 	end
 
 	local jump = current_entries[idx].jump
-	vim.cmd('keepjumps buffer ' .. jump.bufnr)
-	vim.cmd(string.format('keepjumps call cursor(%d, %d)', jump.lnum, jump.col + 1))
+	vim.cmd(string.format(
+		'keepjumps buffer %d | keepjumps call cursor(%d, %d)',
+		jump.bufnr, jump.lnum, jump.col + 1
+	))
 end
 
 vim.keymap.set('n', '<leader>tj', M.toggle, { desc = '[T]oggle [J]umplist float display' })

@@ -12,7 +12,7 @@ local config = {
 	border = 'none',
 	winblend = 50,
 	zindex = 1,
-	no_truncate_max = 9,
+	no_truncate_max = 14
 }
 
 -- Theme colors
