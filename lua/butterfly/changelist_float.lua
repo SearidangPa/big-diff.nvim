@@ -1,4 +1,4 @@
--- === Jump List Float Display ===
+-- === Change List Float Display ===
 local M = {}
 
 local float_win = nil
@@ -41,7 +41,7 @@ local function get_line_content(bufnr, lnum)
 		vim.fn.bufload(bufnr)
 	end
 
-	-- Get line (lnum is 1-indexed in jumplist, nvim_buf_get_lines is 0-indexed)
+	-- Get line (lnum is 1-indexed, nvim_buf_get_lines is 0-indexed)
 	local lines = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)
 	if #lines == 0 then
 		return nil
@@ -61,39 +61,36 @@ local function truncate_left(str, max_len)
 	return str:sub(1, max_len) .. '…'
 end
 
-local function get_jumplist_entries()
-	local jumplist, current_pos = unpack(vim.fn.getjumplist())
+local function get_changelist_entries()
+	local current_buf = vim.api.nvim_get_current_buf()
+	local changelist, current_pos = unpack(vim.fn.getchangelist(current_buf))
 
-	if not jumplist or #jumplist == 0 then
-		return { ' No jumps' }, {}
+	if not changelist or #changelist == 0 then
+		return { ' No changes' }, {}
 	end
 
-	local current_buf = vim.api.nvim_get_current_buf()
 	local cursor_lnum = vim.api.nvim_win_get_cursor(0)[1]
-	local cwd = vim.fn.getcwd() .. '/'
 
-	local backward_jumps = {}
+	-- Get backward changes (entries before current position)
+	local backward_changes = {}
 	for i = 1, current_pos do
-		local jump = jumplist[i]
-		local bufname = vim.api.nvim_buf_get_name(jump.bufnr)
-		if bufname ~= '' and vim.startswith(bufname, cwd) then
-			table.insert(backward_jumps, jump)
-		end
+		local change = changelist[i]
+		table.insert(backward_changes, change)
 	end
 
 	-- Take last 4 (or fewer)
-	local start_idx = math.max(1, #backward_jumps - 3)
+	local start_idx = math.max(1, #backward_changes - 3)
 	local entries = {}
-	for i = start_idx, #backward_jumps do
-		local jump = backward_jumps[i]
+	for i = start_idx, #backward_changes do
+		local change = backward_changes[i]
 		table.insert(entries, {
-			jump = jump,
-			is_current = (jump.bufnr == current_buf and jump.lnum == cursor_lnum),
+			change = change,
+			is_current = (change.lnum == cursor_lnum),
 		})
 	end
 
 	if #entries == 0 then
-		return { ' No jumps in cwd' }, {}
+		return { ' No changes' }, {}
 	end
 
 	local lines = {}
@@ -104,8 +101,8 @@ local function get_jumplist_entries()
 	current_entries = entries
 
 	for i, entry in ipairs(entries) do
-		local jump = entry.jump
-		local line_content = get_line_content(jump.bufnr, jump.lnum)
+		local change = entry.change
+		local line_content = get_line_content(current_buf, change.lnum)
 
 		local display_text
 		if line_content then
@@ -125,14 +122,14 @@ local function get_jumplist_entries()
 			line = line_idx,
 			col_start = 0,
 			col_end = label_len,
-			hl = 'JumpIndex',
+			hl = 'ChangeIndex',
 		})
 
 		table.insert(highlights, {
 			line = line_idx,
 			col_start = label_len + 1,
 			col_end = #line,
-			hl = entry.is_current and 'JumpCurrent' or 'Comment',
+			hl = entry.is_current and 'ChangeCurrent' or 'Comment',
 		})
 	end
 
@@ -144,7 +141,7 @@ local function apply_highlights(highlights)
 		return
 	end
 
-	local ns = vim.api.nvim_create_namespace('jumplist_float')
+	local ns = vim.api.nvim_create_namespace('changelist_float')
 	vim.api.nvim_buf_clear_namespace(float_buf, ns, 0, -1)
 
 	for _, hl in ipairs(highlights) do
@@ -159,8 +156,8 @@ end
 
 local function create_float()
 	local t = themes[vim.o.background] or themes.dark
-	vim.api.nvim_set_hl(0, 'JumpIndex', { fg = t.index, bg = t.bg, bold = true })
-	vim.api.nvim_set_hl(0, 'JumpCurrent', { fg = t.current, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ChangeIndex', { fg = t.index, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ChangeCurrent', { fg = t.current, bg = t.bg, bold = true })
 
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then
 		float_buf = vim.api.nvim_create_buf(false, true)
@@ -198,7 +195,7 @@ local function update_content()
 		return
 	end
 
-	local lines, highlights = get_jumplist_entries()
+	local lines, highlights = get_changelist_entries()
 
 	-- Dynamic sizing with caps
 	config.height = math.min(#lines, config.max_height)
@@ -237,8 +234,8 @@ function M.refresh()
 	end
 end
 
--- Auto-refresh on jump-relevant events
-local group = vim.api.nvim_create_augroup('JumplistFloat', { clear = true })
+-- Auto-refresh on change-relevant events
+local group = vim.api.nvim_create_augroup('ChangelistFloat', { clear = true })
 
 vim.api.nvim_create_autocmd({ 'CursorHold', 'BufEnter', 'WinEnter' }, {
 	group = group,
@@ -265,17 +262,14 @@ function M.jump_to(letter)
 		return
 	end
 
-	local jump = current_entries[idx].jump
-	vim.cmd(string.format(
-		'keepjumps buffer %d | keepjumps call cursor(%d, %d)',
-		jump.bufnr, jump.lnum, jump.col + 1
-	))
+	local change = current_entries[idx].change
+	vim.cmd(string.format('keepjumps call cursor(%d, %d)', change.lnum, change.col + 1))
 end
 
-vim.keymap.set('n', '<leader>tj', M.toggle, { desc = '[T]oggle [J]umplist float display' })
-vim.keymap.set('n', '<leader>ja', function() M.jump_to('a') end, { desc = '[J]ump to entry [a]' })
-vim.keymap.set('n', '<leader>jb', function() M.jump_to('b') end, { desc = '[J]ump to entry [b]' })
-vim.keymap.set('n', '<leader>jc', function() M.jump_to('c') end, { desc = '[J]ump to entry [c]' })
-vim.keymap.set('n', '<leader>jd', function() M.jump_to('d') end, { desc = '[J]ump to entry [d]' })
+vim.keymap.set('n', '<leader>tc', M.toggle, { desc = '[T]oggle [C]hangelist float display' })
+vim.keymap.set('n', '<leader>ca', function() M.jump_to('a') end, { desc = '[C]hangelist entry [a]' })
+vim.keymap.set('n', '<leader>cb', function() M.jump_to('b') end, { desc = '[C]hangelist entry [b]' })
+vim.keymap.set('n', '<leader>cc', function() M.jump_to('c') end, { desc = '[C]hangelist entry [c]' })
+vim.keymap.set('n', '<leader>cd', function() M.jump_to('d') end, { desc = '[C]hangelist entry [d]' })
 
 return M
