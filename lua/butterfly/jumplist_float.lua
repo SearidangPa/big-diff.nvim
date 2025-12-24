@@ -3,6 +3,7 @@ local M = {}
 
 local float_win = nil
 local float_buf = nil
+local current_entries = {}
 
 local config = {
 	width = 15,
@@ -94,8 +95,12 @@ local function get_jumplist_entries()
 
 	local lines = {}
 	local highlights = {}
+	local letters = { 'a', 'b', 'c', 'd' }
 
-	for _, entry in ipairs(entries) do
+	-- Store entries globally for jump_to function
+	current_entries = entries
+
+	for i, entry in ipairs(entries) do
 		local jump = entry.jump
 		local line_content = get_line_content(jump.bufnr, jump.lnum)
 
@@ -106,23 +111,23 @@ local function get_jumplist_entries()
 			display_text = '<unavailable>'
 		end
 
-		local icon = entry.is_next and '●' or '○'
-		local line = string.format('%s %s', icon, display_text)
+		local label = letters[i] .. '.'
+		local line = string.format('%s %s', label, display_text)
 		table.insert(lines, line)
 
 		local line_idx = #lines - 1
-		local icon_byte_len = #icon
+		local label_len = #label
 
 		table.insert(highlights, {
 			line = line_idx,
 			col_start = 0,
-			col_end = icon_byte_len,
+			col_end = label_len,
 			hl = 'JumpIndex',
 		})
 
 		table.insert(highlights, {
 			line = line_idx,
-			col_start = icon_byte_len + 1,
+			col_start = label_len + 1,
 			col_end = #line,
 			hl = entry.is_next and 'JumpCurrent' or 'Comment',
 		})
@@ -250,6 +255,22 @@ vim.api.nvim_create_autocmd({ 'WinResized', 'VimResized', 'ColorScheme' }, {
 	end,
 })
 
+function M.jump_to(letter)
+	local letter_to_idx = { a = 1, b = 2, c = 3, d = 4 }
+	local idx = letter_to_idx[letter]
+	if not idx or not current_entries[idx] then
+		return
+	end
+
+	local jump = current_entries[idx].jump
+	vim.cmd('keepjumps buffer ' .. jump.bufnr)
+	vim.cmd(string.format('keepjumps call cursor(%d, %d)', jump.lnum, jump.col + 1))
+end
+
 vim.keymap.set('n', '<leader>tj', M.toggle, { desc = '[T]oggle [J]umplist float display' })
+vim.keymap.set('n', '<leader>ja', function() M.jump_to('a') end, { desc = '[J]ump to entry [a]' })
+vim.keymap.set('n', '<leader>jb', function() M.jump_to('b') end, { desc = '[J]ump to entry [b]' })
+vim.keymap.set('n', '<leader>jc', function() M.jump_to('c') end, { desc = '[J]ump to entry [c]' })
+vim.keymap.set('n', '<leader>jd', function() M.jump_to('d') end, { desc = '[J]ump to entry [d]' })
 
 return M
