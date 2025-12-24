@@ -3,7 +3,6 @@ local M = {}
 
 local float_win = nil
 local float_buf = nil
-local current_entries = {}
 
 local config = {
 	width = 15,
@@ -95,11 +94,9 @@ local function get_changelist_entries()
 
 	local lines = {}
 	local highlights = {}
-	local letters = { 'a', 'b', 'c', 'd' }
+	local numbers = { '1', '2', '3', '4' }
 
 	-- Store entries globally for jump_to function
-	current_entries = entries
-
 	for i, entry in ipairs(entries) do
 		local change = entry.change
 		local line_content = get_line_content(current_buf, change.lnum)
@@ -111,7 +108,7 @@ local function get_changelist_entries()
 			display_text = '<unavailable>'
 		end
 
-		local label = letters[i] .. '.'
+		local label = numbers[i] .. '.'
 		local line = string.format('%s %s', label, display_text)
 		table.insert(lines, line)
 
@@ -255,21 +252,6 @@ vim.api.nvim_create_autocmd({ 'WinResized', 'VimResized', 'ColorScheme' }, {
 	end,
 })
 
-function M.jump_to(letter)
-	local letter_to_idx = { a = 1, b = 2, c = 3, d = 4 }
-	local idx = letter_to_idx[letter]
-	if not idx or not current_entries[idx] then
-		return
-	end
-
-	local change = current_entries[idx].change
-	vim.cmd(string.format('keepjumps call cursor(%d, %d)', change.lnum, change.col + 1))
-end
-
 vim.keymap.set('n', '<leader>tc', M.toggle, { desc = '[T]oggle [C]hangelist float display' })
-vim.keymap.set('n', '<leader>ca', function() M.jump_to('a') end, { desc = '[C]hangelist entry [a]' })
-vim.keymap.set('n', '<leader>cb', function() M.jump_to('b') end, { desc = '[C]hangelist entry [b]' })
-vim.keymap.set('n', '<leader>cc', function() M.jump_to('c') end, { desc = '[C]hangelist entry [c]' })
-vim.keymap.set('n', '<leader>cd', function() M.jump_to('d') end, { desc = '[C]hangelist entry [d]' })
 
 return M
