@@ -205,16 +205,7 @@ function M.refresh()
 	end
 end
 
--- Auto-refresh and reposition
 local group = vim.api.nvim_create_augroup('GrappleFloat', { clear = true })
-
-vim.api.nvim_create_autocmd('User', {
-	group = group,
-	pattern = { 'GrappleTag', 'GrappleUntag', 'GrappleReset', 'GrappleTagChanged' },
-	callback = function()
-		vim.schedule(M.refresh)
-	end,
-})
 
 vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorScheme' }, {
 	group = group,
