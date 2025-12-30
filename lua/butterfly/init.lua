@@ -3,6 +3,9 @@ local M = {}
 local float_win = nil
 local float_buf = nil
 local diff_entries = {}
+local save_order = {}
+local save_counter = 0
+local current_entry_idx = nil
 
 local config = {
 	width = 15,
@@ -112,6 +115,9 @@ local function_node_types = {
 	zig = { 'function_declaration' },
 }
 
+---@param filepath string
+---@param line number
+---@return string?
 local function get_function_at_line(filepath, line)
 	local abs_path = vim.fn.fnamemodify(filepath, ':p')
 	local bufnr = vim.fn.bufnr(abs_path)
@@ -152,6 +158,17 @@ end
 
 local function get_diff_function_names()
 	local hunks = get_diff_hunks()
+
+	table.sort(hunks, function(a, b)
+		local abs_a = vim.fn.fnamemodify(a.file, ':p')
+		local abs_b = vim.fn.fnamemodify(b.file, ':p')
+		local name_a = get_function_at_line(a.file, a.line) or vim.fn.fnamemodify(a.file, ':t')
+		local name_b = get_function_at_line(b.file, b.line) or vim.fn.fnamemodify(b.file, ':t')
+		local order_a = save_order[abs_a .. ':' .. name_a] or 0
+		local order_b = save_order[abs_b .. ':' .. name_b] or 0
+		return order_a > order_b
+	end)
+
 	local seen = {}
 	local lines = {}
 	local highlights = {}
@@ -173,8 +190,17 @@ local function get_diff_function_names()
 				line = idx - 1,
 				col_start = 0,
 				col_end = #tostring(idx),
-				hl = 'GrappleIndex',
+				hl = 'ButterflyIndex',
 			})
+
+			if idx == current_entry_idx then
+				table.insert(highlights, {
+					line = idx - 1,
+					col_start = 0,
+					col_end = #line,
+					hl = 'ButterflyCurrent',
+				})
+			end
 		end
 	end
 
@@ -183,8 +209,8 @@ end
 
 local function create_float(num_lines)
 	local t = themes[vim.o.background] or themes.dark
-	vim.api.nvim_set_hl(0, 'GrappleIndex', { fg = t.index, bg = t.bg, bold = true })
-	vim.api.nvim_set_hl(0, 'GrappleCurrent', { fg = t.current, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ButterflyIndex', { fg = t.index, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ButterflyCurrent', { fg = t.current, bg = t.bg, bold = true })
 
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then
 		float_buf = vim.api.nvim_create_buf(false, true)
@@ -226,7 +252,6 @@ local function update_content()
 
 	local lines, highlights = get_diff_function_names()
 
-	-- Dynamic sizing with caps
 	config.height = math.min(#lines, config.max_height)
 	config.width = 4
 	for _, line in ipairs(lines) do
@@ -266,11 +291,13 @@ end
 function M.goto_entry(n)
 	local entry = diff_entries[n]
 	if not entry then return end
+	current_entry_idx = n
 	vim.cmd('edit ' .. vim.fn.fnameescape(entry.file))
 	vim.api.nvim_win_set_cursor(0, { entry.line, 0 })
+	M.refresh()
 end
 
-local group = vim.api.nvim_create_augroup('GrappleFloat', { clear = true })
+local group = vim.api.nvim_create_augroup('ButterflyFloat', { clear = true })
 
 vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorScheme' }, {
 	group = group,
@@ -281,13 +308,29 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorSche
 	end,
 })
 
-vim.api.nvim_create_user_command('ButterflyToggle', M.toggle, { desc = 'Refresh Butterfly float display' })
+vim.api.nvim_create_autocmd('BufWritePost', {
+	group = group,
+	callback = function(ev)
+		local filepath = vim.api.nvim_buf_get_name(ev.buf)
+		local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+		local func_name = get_function_at_line(filepath, cursor_line)
+		local key = filepath .. ':' .. (func_name or vim.fn.fnamemodify(filepath, ':t'))
+
+		save_counter = save_counter + 1
+		save_order[key] = save_counter
+		if float_win and vim.api.nvim_win_is_valid(float_win) then
+			vim.schedule(M.refresh)
+		end
+	end,
+})
+
+vim.api.nvim_create_user_command('ButterflyToggle', M.toggle, { desc = 'Butterfly Toggle' })
+vim.api.nvim_create_user_command('ButterflyRefresh', M.refresh, { desc = 'Butterfly Refresh ' })
 
 for i = 1, 9 do
 	vim.keymap.set('n', '<leader>b' .. i, function() M.goto_entry(i) end, { desc = '[B]utterfly go to ' .. i })
 end
 
--- toggle automatically on startup
 M.setup = function()
 	vim.schedule(M.show)
 end
