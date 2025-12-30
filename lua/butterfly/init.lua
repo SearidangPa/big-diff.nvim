@@ -196,6 +196,9 @@ local function create_float(num_lines)
 	end
 
 	local height = num_lines or 2
+	if height < 1 then
+		height = 1
+	end
 	local win_opts = {
 		relative = 'editor',
 		width = config.width,
