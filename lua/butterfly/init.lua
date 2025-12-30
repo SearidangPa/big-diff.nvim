@@ -282,7 +282,7 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorSche
 	end,
 })
 
-vim.keymap.set('n', '<leader>tg', M.toggle, { desc = '[T]oggle [G]rapple float display' })
+vim.api.nvim_create_user_command('ButterflyToggle', M.toggle, { desc = 'Refresh Butterfly float display' })
 
 for i = 1, 9 do
 	vim.keymap.set('n', '<leader>b' .. i, function() M.goto_entry(i) end, { desc = '[B]utterfly go to ' .. i })
