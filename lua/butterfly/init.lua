@@ -195,7 +195,7 @@ local function create_float(num_lines)
 		vim.bo[float_buf].modifiable = false
 	end
 
-	local height = num_lines or 2
+	local height = num_lines 
 	if height < 1 then
 		height = 1
 	end
