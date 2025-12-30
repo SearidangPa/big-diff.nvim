@@ -3,12 +3,13 @@ local M = {}
 
 local float_win = nil
 local float_buf = nil
+local diff_entries = {}
 
 local config = {
 	width = 15,
 	height = 4,
 	max_width = 25,
-	max_height = 8,
+	max_height = 9,
 	border = 'none',
 	winblend = 50,
 	zindex = 1,
@@ -59,55 +60,11 @@ local function truncate_middle(str)
 	return table.concat({ first, second_last, last }, "_")
 end
 
-local function get_grapple_tags()
-	local ok, grapple = pcall(require, 'grapple')
-	if not ok then return {}, {} end
-
-	local tags = grapple.tags()
-	if not tags or #tags == 0 then
-		return { ' No tags' }, {}
-	end
-
-	local current_file = vim.fn.expand('%:p')
-	local lines = {}
-	local highlights = {}
-
-	for i, tag in ipairs(tags) do
-		if i > 4 then break end
-
-		local name = vim.fn.fnamemodify(tag.path, ':t:r')
-		name = truncate_middle(name)
-		local is_current = tag.path == current_file
-		local icon = is_current and '●' or '○'
-
-		local line = string.format('%s %s', icon, name)
-		table.insert(lines, line)
-
-		local line_idx = #lines - 1
-		local icon_byte_len = #icon
-
-		table.insert(highlights, {
-			line = line_idx,
-			col_start = 0,
-			col_end = icon_byte_len,
-			hl = 'GrappleIndex'
-		})
-
-		table.insert(highlights, {
-			line = line_idx,
-			col_start = icon_byte_len + 1,
-			col_end = #line,
-			hl = is_current and 'GrappleCurrent' or 'Comment'
-		})
-	end
-
-	return lines, highlights
-end
 
 local function apply_highlights(highlights)
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
 
-	local ns = vim.api.nvim_create_namespace('grapple_float')
+	local ns = vim.api.nvim_create_namespace('butterfly_float')
 	vim.api.nvim_buf_clear_namespace(float_buf, ns, 0, -1)
 
 	for _, hl in ipairs(highlights) do
@@ -126,7 +83,106 @@ local function apply_highlights(highlights)
 	end
 end
 
-local function create_float()
+local function get_diff_hunks()
+	local hunks = {}
+	local handle = io.popen('git diff HEAD --unified=0 2>/dev/null')
+	if not handle then return hunks end
+
+	local output = handle:read('*a')
+	handle:close()
+
+	local current_file = nil
+	for line in output:gmatch('[^\n]+') do
+		local file = line:match('^%+%+%+ b/(.+)$')
+		if file then
+			current_file = file
+		elseif current_file then
+			local start_line = line:match('^@@ .* %+(%d+)')
+			if start_line then
+				table.insert(hunks, { file = current_file, line = tonumber(start_line) })
+			end
+		end
+	end
+	return hunks
+end
+
+local function_node_types = {
+	lua = { 'function_declaration', 'function_definition', 'local_function' },
+	go = { 'function_declaration', 'method_declaration' },
+	fish = { 'function_definition' },
+	zig = { 'function_declaration' },
+}
+
+local function get_function_at_line(filepath, line)
+	local abs_path = vim.fn.fnamemodify(filepath, ':p')
+	local bufnr = vim.fn.bufnr(abs_path)
+
+	if bufnr == -1 then
+		if not vim.loop.fs_stat(abs_path) then return nil end
+		bufnr = vim.fn.bufadd(abs_path)
+		vim.fn.bufload(bufnr)
+	end
+
+	local ft = vim.bo[bufnr].filetype
+	local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+	if not ok or not parser then return nil end
+
+	local tree = parser:parse()[1]
+	if not tree then return nil end
+
+	local root = tree:root()
+	local node_types = function_node_types[ft] or { 'function_declaration', 'function_definition', 'method_declaration' }
+	local row = math.max(0, line - 1)
+
+	local node = root:named_descendant_for_range(row, 0, row, 0)
+	while node do
+		local ntype = node:type()
+		for _, ftype in ipairs(node_types) do
+			if ntype == ftype then
+				for child in node:iter_children() do
+					if child:type() == 'name' or child:type() == 'identifier' or child:type() == 'field_identifier' then
+						return vim.treesitter.get_node_text(child, bufnr)
+					end
+				end
+			end
+		end
+		node = node:parent()
+	end
+	return nil
+end
+
+local function get_diff_function_names()
+	local hunks = get_diff_hunks()
+	local seen = {}
+	local lines = {}
+	local highlights = {}
+	diff_entries = {}
+
+	for _, hunk in ipairs(hunks) do
+		local name = get_function_at_line(hunk.file, hunk.line)
+		if not name then
+			name = vim.fn.fnamemodify(hunk.file, ':t')
+		end
+
+		if not seen[name] then
+			seen[name] = true
+			local idx = #lines + 1
+			local line = string.format('%d %s', idx, truncate_middle(name))
+			table.insert(lines, line)
+			table.insert(diff_entries, { file = hunk.file, line = hunk.line })
+			table.insert(highlights, {
+				line = idx - 1,
+				col_start = 0,
+				col_end = #tostring(idx),
+				hl = 'GrappleIndex',
+			})
+		end
+	end
+
+	return lines, highlights
+end
+
+local function create_float(num_lines)
 	local t = themes[vim.o.background] or themes.dark
 	vim.api.nvim_set_hl(0, 'GrappleIndex', { fg = t.index, bg = t.bg, bold = true })
 	vim.api.nvim_set_hl(0, 'GrappleCurrent', { fg = t.current, bg = t.bg, bold = true })
@@ -139,12 +195,12 @@ local function create_float()
 		vim.bo[float_buf].modifiable = false
 	end
 
-
+	local height = num_lines or config.height
 	local win_opts = {
 		relative = 'editor',
 		width = config.width,
-		height = config.height,
-		row = 2, -- 2 for treesitter context
+		height = height,
+		row = math.floor(vim.o.lines - height) - 1, -- 1 for the status line
 		col = vim.o.columns - config.width,
 		style = 'minimal',
 		border = config.border,
@@ -166,7 +222,7 @@ end
 local function update_content()
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
 
-	local lines, highlights = get_grapple_tags()
+	local lines, highlights = get_diff_function_names()
 
 	-- Dynamic sizing with caps
 	config.height = math.min(#lines, config.max_height)
@@ -181,7 +237,7 @@ local function update_content()
 	vim.bo[float_buf].modifiable = false
 
 	apply_highlights(highlights)
-	create_float()
+	create_float(#lines)
 end
 
 function M.toggle()
@@ -205,6 +261,13 @@ function M.refresh()
 	end
 end
 
+function M.goto_entry(n)
+	local entry = diff_entries[n]
+	if not entry then return end
+	vim.cmd('edit ' .. vim.fn.fnameescape(entry.file))
+	vim.api.nvim_win_set_cursor(0, { entry.line, 0 })
+end
+
 local group = vim.api.nvim_create_augroup('GrappleFloat', { clear = true })
 
 vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorScheme' }, {
@@ -217,6 +280,10 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorSche
 })
 
 vim.keymap.set('n', '<leader>tg', M.toggle, { desc = '[T]oggle [G]rapple float display' })
+
+for i = 1, 9 do
+	vim.keymap.set('n', '<leader>b' .. i, function() M.goto_entry(i) end, { desc = '[B]utterfly go to ' .. i })
+end
 
 -- toggle automatically on startup
 M.setup = function()
