@@ -195,18 +195,12 @@ local function create_float(num_lines)
 		vim.bo[float_buf].modifiable = false
 	end
 
-	local height
-	if num_lines then
-		height = num_lines
-	else
-		height = 1
-	end
-	-- local height = (num_lines or config.height) + 1
+	local height = num_lines or 2
 	local win_opts = {
 		relative = 'editor',
 		width = config.width,
 		height = height,
-		row = (vim.o.lines- height) -1,
+		row = (vim.o.lines - height) - 1,
 		col = vim.o.columns - config.width,
 		style = 'minimal',
 		border = config.border,
