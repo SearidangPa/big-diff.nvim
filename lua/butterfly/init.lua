@@ -1,4 +1,3 @@
--- === Grapple Float Display ===
 local M = {}
 
 local float_win = nil
