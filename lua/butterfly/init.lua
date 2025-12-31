@@ -205,41 +205,48 @@ local function get_diff_function_names(callback)
 			if not seen[name] then
 				seen[name] = true
 				local idx = #lines + 1
-				local line = string.format('%d %s %s', idx, icon, truncate_middle(name))
+				local idx_str = string.format('%2d', idx)
+				local line = string.format('%s%s %s', icon, idx_str, truncate_middle(name))
 				table.insert(lines, line)
 				table.insert(diff_entries, { file = hunk.file, line = hunk.line })
-				local idx_len = #tostring(idx)
 
+				-- compute byte indices for accurate highlights
+				local icon_b = #icon
+				local idx_b = #idx_str
+				local line_b = #line
+
+				-- highlight icon
 				table.insert(highlights, {
 					line = idx - 1,
 					col_start = 0,
-					col_end = idx_len,
+					col_end = icon_b,
+					hl = ((icon == 'ƒ') and 'ButterflyFunc' or 'ButterflyFile'),
+				})
+
+				-- highlight index after icon and space
+				local index_start = icon_b + 1
+				local index_end = index_start + idx_b
+				table.insert(highlights, {
+					line = idx - 1,
+					col_start = index_start,
+					col_end = index_end,
 					hl = 'ButterflyIndex',
 				})
 
-				local icon_start = idx_len + 1
-				local icon_end = icon_start + #icon
-				local icon_hl = (icon == 'ƒ') and 'ButterflyFunc' or 'ButterflyFile'
-
-				table.insert(highlights, {
-					line = idx - 1,
-					col_start = icon_start,
-					col_end = icon_end,
-					hl = icon_hl,
-				})
-
+				-- current line highlight or comment for name
 				if idx == current_entry_idx then
 					table.insert(highlights, {
 						line = idx - 1,
 						col_start = 0,
-						col_end = #line,
+						col_end = line_w,
 						hl = 'ButterflyCurrent',
 					})
-				else -- highlight comment
+				else
+					local name_start = index_end + 1
 					table.insert(highlights, {
 						line = idx - 1,
-						col_start = icon_end + 1,
-						col_end = #line,
+						col_start = name_start,
+						col_end = line_b,
 						hl = 'Comment',
 					})
 				end
@@ -250,47 +257,6 @@ local function get_diff_function_names(callback)
 	end)
 end
 
-local function create_float(num_lines)
-	local t = themes[vim.o.background] or themes.dark
-	vim.api.nvim_set_hl(0, 'ButterflyIndex', { fg = t.index, bg = t.bg, bold = true })
-	vim.api.nvim_set_hl(0, 'ButterflyCurrent', { fg = t.current, bg = t.bg, bold = true })
-	vim.api.nvim_set_hl(0, 'ButterflyFile', { fg = t.file, bg = t.bg, bold = true })
-	vim.api.nvim_set_hl(0, 'ButterflyFunc', { fg = t.func, bg = t.bg, bold = true })
-
-	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then
-		float_buf = vim.api.nvim_create_buf(false, true)
-		vim.bo[float_buf].buftype = 'nofile'
-		vim.bo[float_buf].bufhidden = 'hide'
-		vim.bo[float_buf].swapfile = false
-		vim.bo[float_buf].modifiable = false
-	end
-
-	local height = num_lines or 1
-	if height < 1 then
-		height = 1
-	end
-	local win_opts = {
-		relative = 'editor',
-		width = config.width,
-		height = height,
-		row = (vim.o.lines - height) - 1,
-		col = vim.o.columns - config.width,
-		style = 'minimal',
-		border = config.border,
-		zindex = config.zindex,
-		focusable = false,
-	}
-
-	if not float_win or not vim.api.nvim_win_is_valid(float_win) then
-		float_win = vim.api.nvim_open_win(float_buf, false, win_opts)
-		vim.wo[float_win].winblend = config.winblend
-		vim.wo[float_win].cursorline = false
-		vim.wo[float_win].number = false
-		vim.wo[float_win].relativenumber = false
-	else
-		vim.api.nvim_win_set_config(float_win, win_opts)
-	end
-end
 
 local function update_display()
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
@@ -310,29 +276,7 @@ local function update_display()
 		vim.bo[float_buf].modifiable = false
 
 		apply_highlights(highlights)
-		create_float(#lines)
 	end)
-end
-
-function M.toggle()
-	if float_win and vim.api.nvim_win_is_valid(float_win) then
-		vim.api.nvim_win_close(float_win, true)
-		float_win = nil
-	else
-		create_float()
-		update_display()
-	end
-end
-
-function M.show()
-	create_float()
-	update_display()
-end
-
-function M.refresh()
-	if float_win and vim.api.nvim_win_is_valid(float_win) then
-		update_display()
-	end
 end
 
 function M.goto_entry(n)
@@ -409,28 +353,9 @@ vim.api.nvim_create_autocmd('BufWritePost', {
 	end,
 })
 
-vim.api.nvim_create_user_command('ButterflyToggle', M.toggle, { desc = 'Butterfly Toggle' })
-vim.api.nvim_create_user_command('ButterflyRefresh', M.refresh, { desc = 'Butterfly Refresh ' })
 
-for i = 1, 9 do
-	vim.keymap.set('n', '<leader>b' .. i, function() M.goto_entry(i) end, { desc = '[B]utterfly go to ' .. i })
-end
-
-vim.keymap.set('n', '<leader>bb', M.pick, { desc = '[B]utterfly pick' })
 
 M.setup = function()
-	local original_handler = vim.lsp.handlers['workspace/applyEdit']
-	if original_handler then
-		vim.lsp.handlers['workspace/applyEdit'] = function(err, result, ctx)
-			local response = original_handler(err, result, ctx)
-			if float_win and vim.api.nvim_win_is_valid(float_win) then
-				vim.schedule(M.refresh)
-			end
-			return response
-		end
-	end
-
-	vim.schedule(M.show)
 end
 
 return M
