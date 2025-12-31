@@ -247,7 +247,7 @@ local function create_float(num_lines)
 	end
 end
 
-local function update_content()
+local function update_display()
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
 
 	local lines, highlights = get_diff_function_names()
@@ -273,18 +273,18 @@ function M.toggle()
 		float_win = nil
 	else
 		create_float()
-		update_content()
+		update_display()
 	end
 end
 
 function M.show()
 	create_float()
-	update_content()
+	update_display()
 end
 
 function M.refresh()
 	if float_win and vim.api.nvim_win_is_valid(float_win) then
-		update_content()
+		update_display()
 	end
 end
 
@@ -308,7 +308,7 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorSche
 	end,
 })
 
-vim.api.nvim_create_autocmd('BufWritePost', {
+vim.api.nvim_create_autocmd({ 'BufWritePost', 'TextChanged', 'InsertLeave' }, {
 	group = group,
 	callback = function(ev)
 		local filepath = vim.api.nvim_buf_get_name(ev.buf)
@@ -332,6 +332,17 @@ for i = 1, 9 do
 end
 
 M.setup = function()
+	local original_handler = vim.lsp.handlers['workspace/applyEdit']
+	if original_handler then
+		vim.lsp.handlers['workspace/applyEdit'] = function(err, result, ctx)
+			local response = original_handler(err, result, ctx)
+			if float_win and vim.api.nvim_win_is_valid(float_win) then
+				vim.schedule(M.refresh)
+			end
+			return response
+		end
+	end
+
 	vim.schedule(M.show)
 end
 
