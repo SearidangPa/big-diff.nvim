@@ -202,6 +202,13 @@ local function get_diff_function_names(callback)
 						col_end = #line,
 						hl = 'ButterflyCurrent',
 					})
+				else -- highlight comment
+					table.insert(highlights, {
+						line = idx - 1,
+						col_start = 1,
+						col_end = #line,
+						hl = 'Comment',
+					})
 				end
 			end
 		end
@@ -312,18 +319,21 @@ function M.pick()
 		Snacks.picker({
 			title = "Butterfly",
 			items = items,
+			format = function(item)
+				return { { item.text, "SnacksPickerLabel" } }
+			end,
 			layout = {
 				layout = {
 					box = "horizontal",
 					width = 0.8,
 					min_width = 120,
-					height = 0,
+					height = 0.6,
 					{
 						box = "vertical",
 						border = "rounded",
 						title = "{title} {live} {flags}",
-						{ win = "input", height = 1, border = "bottom" },
-						{ win = "list", border = "none" },
+						{ win = "input", height = 1,     border = "bottom" },
+						{ win = "list",  border = "none" },
 					},
 				},
 			},
