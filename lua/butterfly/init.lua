@@ -42,10 +42,23 @@ local function truncate_middle(str)
 	if #str <= config.no_truncate_max then
 		return str
 	end
-	-- split on: space, underscore, hyphen (and collapse repeats)
+	-- split on: underscore, hyphen, plus (no spaces)
 	local parts = {}
-	for p in str:gmatch("[^%s_%-%+]+") do
+	for p in str:gmatch("[^_%-%+]+") do
 		parts[#parts + 1] = p
+	end
+
+	-- if no separators found, try camelCase / PascalCase splitting
+	if #parts <= 1 then
+		local snake = str
+		-- insert underscore between lower/number and upper
+		snake = snake:gsub("([a-z0-9])([A-Z])", "%1_%2")
+		-- split consecutive uppers before Upper+lower (HTMLParser -> HTML_Parser)
+		snake = snake:gsub("([A-Z])([A-Z][a-z])", "%1_%2")
+		parts = {}
+		for p in snake:gmatch("[^_%-%+]+") do
+			parts[#parts + 1] = p
+		end
 	end
 
 	if #parts == 0 then
@@ -59,11 +72,12 @@ local function truncate_middle(str)
 		return table.concat(parts, "_")
 	end
 
-	-- For long names: first + second_last + last (4 chars each)
+	-- For long names: first + third_last + second_last + last (4 chars each)
 	local first = parts[1]:sub(1, 4)
+	local third_last = parts[#parts - 2]:sub(1, 4)
 	local second_last = parts[#parts - 1]:sub(1, 4)
 	local last = parts[#parts]:sub(1, 4)
-	return table.concat({ first, second_last, last }, "_")
+	return table.concat({ first, third_last, second_last, last }, "_")
 end
 
 
