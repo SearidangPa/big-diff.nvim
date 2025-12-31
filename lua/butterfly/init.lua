@@ -24,11 +24,15 @@ local themes = {
 		bg = '#242136',
 		index = '#bb9af7',
 		current = '#9ece6a',
+		file = '#C1F0F7',
+		func = '#FBB8DC',
 	},
 	light = {
 		bg = '#FAF4ED',
 		current = '#56949f',
 		index = '#907aa9',
+		file = '#C1F0F7',
+		func = '#FBB8DC',
 	},
 }
 
@@ -178,21 +182,36 @@ local function get_diff_function_names(callback)
 
 		for _, hunk in ipairs(hunks) do
 			local name = get_function_at_line(hunk.file, hunk.line)
+			local icon = 'ƒ'
 			if not name then
 				name = vim.fn.fnamemodify(hunk.file, ':t')
+				icon = '📄'
 			end
 
 			if not seen[name] then
 				seen[name] = true
 				local idx = #lines + 1
-				local line = string.format('%d %s', idx, truncate_middle(name))
+				local line = string.format('%d %s %s', idx, icon, truncate_middle(name))
 				table.insert(lines, line)
 				table.insert(diff_entries, { file = hunk.file, line = hunk.line })
+				local idx_len = #tostring(idx)
+
 				table.insert(highlights, {
 					line = idx - 1,
 					col_start = 0,
-					col_end = #tostring(idx),
+					col_end = idx_len,
 					hl = 'ButterflyIndex',
+				})
+
+				local icon_start = idx_len + 1
+				local icon_end = icon_start + #icon
+				local icon_hl = (icon == 'ƒ') and 'ButterflyFunc' or 'ButterflyFile'
+
+				table.insert(highlights, {
+					line = idx - 1,
+					col_start = icon_start,
+					col_end = icon_end,
+					hl = icon_hl,
 				})
 
 				if idx == current_entry_idx then
@@ -205,7 +224,7 @@ local function get_diff_function_names(callback)
 				else -- highlight comment
 					table.insert(highlights, {
 						line = idx - 1,
-						col_start = 1,
+						col_start = icon_end + 1,
 						col_end = #line,
 						hl = 'Comment',
 					})
@@ -221,6 +240,8 @@ local function create_float(num_lines)
 	local t = themes[vim.o.background] or themes.dark
 	vim.api.nvim_set_hl(0, 'ButterflyIndex', { fg = t.index, bg = t.bg, bold = true })
 	vim.api.nvim_set_hl(0, 'ButterflyCurrent', { fg = t.current, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ButterflyFile', { fg = t.file, bg = t.bg, bold = true })
+	vim.api.nvim_set_hl(0, 'ButterflyFunc', { fg = t.func, bg = t.bg, bold = true })
 
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then
 		float_buf = vim.api.nvim_create_buf(false, true)
