@@ -302,6 +302,41 @@ function M.goto_entry(n)
 	M.refresh()
 end
 
+function M.pick()
+	get_diff_function_names(function(lines, _)
+		local items = {}
+		for i, line in ipairs(lines) do
+			table.insert(items, { text = line, idx = i })
+		end
+
+		Snacks.picker({
+			title = "Butterfly",
+			items = items,
+			layout = {
+				layout = {
+					box = "horizontal",
+					width = 0.8,
+					min_width = 120,
+					height = 0,
+					{
+						box = "vertical",
+						border = "rounded",
+						title = "{title} {live} {flags}",
+						{ win = "input", height = 1, border = "bottom" },
+						{ win = "list", border = "none" },
+					},
+				},
+			},
+			confirm = function(picker, item)
+				picker:close()
+				if item then
+					M.goto_entry(item.idx)
+				end
+			end,
+		})
+	end)
+end
+
 local group = vim.api.nvim_create_augroup('ButterflyFloat', { clear = true })
 
 vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorScheme' }, {
@@ -335,6 +370,8 @@ vim.api.nvim_create_user_command('ButterflyRefresh', M.refresh, { desc = 'Butter
 for i = 1, 9 do
 	vim.keymap.set('n', '<leader>b' .. i, function() M.goto_entry(i) end, { desc = '[B]utterfly go to ' .. i })
 end
+
+vim.keymap.set('n', '<leader>bb', M.pick, { desc = '[B]utterfly pick' })
 
 M.setup = function()
 	local original_handler = vim.lsp.handlers['workspace/applyEdit']
