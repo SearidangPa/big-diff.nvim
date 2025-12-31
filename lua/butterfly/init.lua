@@ -85,27 +85,30 @@ local function apply_highlights(highlights)
 	end
 end
 
-local function get_diff_hunks()
-	local hunks = {}
-	local handle = io.popen('git diff HEAD --unified=0 2>/dev/null')
-	if not handle then return hunks end
-
-	local output = handle:read('*a')
-	handle:close()
-
-	local current_file = nil
-	for line in output:gmatch('[^\n]+') do
-		local file = line:match('^%+%+%+ b/(.+)$')
-		if file then
-			current_file = file
-		elseif current_file then
-			local start_line = line:match('^@@ .* %+(%d+)')
-			if start_line then
-				table.insert(hunks, { file = current_file, line = tonumber(start_line) })
+local function get_diff_hunks(callback)
+	vim.system(
+		{ 'git', 'diff', 'HEAD', '--unified=0' },
+		{ text = true },
+		function(obj)
+			local hunks = {}
+			local output = obj.stdout or ''
+			local current_file = nil
+			for line in output:gmatch('[^\n]+') do
+				local file = line:match('^%+%+%+ b/(.+)$')
+				if file then
+					current_file = file
+				elseif current_file then
+					local start_line = line:match('^@@ .* %+(%d+)')
+					if start_line then
+						table.insert(hunks, { file = current_file, line = tonumber(start_line) })
+					end
+				end
 			end
+			vim.schedule(function()
+				callback(hunks)
+			end)
 		end
-	end
-	return hunks
+	)
 end
 
 local function_node_types = {
@@ -156,55 +159,55 @@ local function get_function_at_line(filepath, line)
 	return nil
 end
 
-local function get_diff_function_names()
-	local hunks = get_diff_hunks()
+local function get_diff_function_names(callback)
+	get_diff_hunks(function(hunks)
+		table.sort(hunks, function(a, b)
+			local abs_a = vim.fn.fnamemodify(a.file, ':p')
+			local abs_b = vim.fn.fnamemodify(b.file, ':p')
+			local name_a = get_function_at_line(a.file, a.line) or vim.fn.fnamemodify(a.file, ':t')
+			local name_b = get_function_at_line(b.file, b.line) or vim.fn.fnamemodify(b.file, ':t')
+			local order_a = save_order[abs_a .. ':' .. name_a] or 0
+			local order_b = save_order[abs_b .. ':' .. name_b] or 0
+			return order_a > order_b
+		end)
 
-	table.sort(hunks, function(a, b)
-		local abs_a = vim.fn.fnamemodify(a.file, ':p')
-		local abs_b = vim.fn.fnamemodify(b.file, ':p')
-		local name_a = get_function_at_line(a.file, a.line) or vim.fn.fnamemodify(a.file, ':t')
-		local name_b = get_function_at_line(b.file, b.line) or vim.fn.fnamemodify(b.file, ':t')
-		local order_a = save_order[abs_a .. ':' .. name_a] or 0
-		local order_b = save_order[abs_b .. ':' .. name_b] or 0
-		return order_a > order_b
-	end)
+		local seen = {}
+		local lines = {}
+		local highlights = {}
+		diff_entries = {}
 
-	local seen = {}
-	local lines = {}
-	local highlights = {}
-	diff_entries = {}
+		for _, hunk in ipairs(hunks) do
+			local name = get_function_at_line(hunk.file, hunk.line)
+			if not name then
+				name = vim.fn.fnamemodify(hunk.file, ':t')
+			end
 
-	for _, hunk in ipairs(hunks) do
-		local name = get_function_at_line(hunk.file, hunk.line)
-		if not name then
-			name = vim.fn.fnamemodify(hunk.file, ':t')
-		end
-
-		if not seen[name] then
-			seen[name] = true
-			local idx = #lines + 1
-			local line = string.format('%d %s', idx, truncate_middle(name))
-			table.insert(lines, line)
-			table.insert(diff_entries, { file = hunk.file, line = hunk.line })
-			table.insert(highlights, {
-				line = idx - 1,
-				col_start = 0,
-				col_end = #tostring(idx),
-				hl = 'ButterflyIndex',
-			})
-
-			if idx == current_entry_idx then
+			if not seen[name] then
+				seen[name] = true
+				local idx = #lines + 1
+				local line = string.format('%d %s', idx, truncate_middle(name))
+				table.insert(lines, line)
+				table.insert(diff_entries, { file = hunk.file, line = hunk.line })
 				table.insert(highlights, {
 					line = idx - 1,
 					col_start = 0,
-					col_end = #line,
-					hl = 'ButterflyCurrent',
+					col_end = #tostring(idx),
+					hl = 'ButterflyIndex',
 				})
+
+				if idx == current_entry_idx then
+					table.insert(highlights, {
+						line = idx - 1,
+						col_start = 0,
+						col_end = #line,
+						hl = 'ButterflyCurrent',
+					})
+				end
 			end
 		end
-	end
 
-	return lines, highlights
+		callback(lines, highlights)
+	end)
 end
 
 local function create_float(num_lines)
@@ -250,21 +253,23 @@ end
 local function update_display()
 	if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
 
-	local lines, highlights = get_diff_function_names()
+	get_diff_function_names(function(lines, highlights)
+		if not float_buf or not vim.api.nvim_buf_is_valid(float_buf) then return end
 
-	config.height = math.min(#lines, config.max_height)
-	config.width = 4
-	for _, line in ipairs(lines) do
-		config.width = math.max(config.width, vim.fn.strdisplaywidth(line))
-	end
-	config.width = math.min(config.width, config.max_width)
+		config.height = math.min(#lines, config.max_height)
+		config.width = 4
+		for _, line in ipairs(lines) do
+			config.width = math.max(config.width, vim.fn.strdisplaywidth(line))
+		end
+		config.width = math.min(config.width, config.max_width)
 
-	vim.bo[float_buf].modifiable = true
-	vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, lines)
-	vim.bo[float_buf].modifiable = false
+		vim.bo[float_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, lines)
+		vim.bo[float_buf].modifiable = false
 
-	apply_highlights(highlights)
-	create_float(#lines)
+		apply_highlights(highlights)
+		create_float(#lines)
+	end)
 end
 
 function M.toggle()
@@ -308,7 +313,7 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'WinResized', 'VimResized', 'ColorSche
 	end,
 })
 
-vim.api.nvim_create_autocmd({ 'BufWritePost', 'TextChanged', 'InsertLeave' }, {
+vim.api.nvim_create_autocmd('BufWritePost', {
 	group = group,
 	callback = function(ev)
 		local filepath = vim.api.nvim_buf_get_name(ev.buf)
