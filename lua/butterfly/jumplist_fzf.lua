@@ -83,13 +83,13 @@ local function get_scope_at_line(filepath, line)
         for child in node:iter_children() do
           local child_type = child:type()
           if
-            child_type == 'name'
-            or child_type == 'identifier'
-            or child_type == 'field_identifier'
-            or child_type == 'type_identifier'
-            -- Lua: `function M.pick(...)` / `function M:pick(...)`
-            or child_type == 'dot_index_expression'
-            or child_type == 'method_index_expression'
+              child_type == 'name'
+              or child_type == 'identifier'
+              or child_type == 'field_identifier'
+              or child_type == 'type_identifier'
+              -- Lua: `function M.pick(...)` / `function M:pick(...)`
+              or child_type == 'dot_index_expression'
+              or child_type == 'method_index_expression'
           then
             name = vim.treesitter.get_node_text(child, bufnr)
             break
@@ -433,8 +433,8 @@ function M.pick(opts)
         {
           box = 'vertical',
           width = vim.o.columns,
-          { win = 'input', height = 1, border = 'bottom' },
-          { win = 'list', border = 'none' },
+          { win = 'input', height = 1,     border = 'bottom' },
+          { win = 'list',  border = 'none' },
         },
       },
     },
@@ -442,7 +442,6 @@ function M.pick(opts)
       picker:close()
       if item then
         vim.cmd('edit ' .. vim.fn.fnameescape(item.file))
-        vim.api.nvim_win_set_cursor(0, { item.line or 1, math.max(0, (item.col or 1) - 1) })
       end
     end,
   }
