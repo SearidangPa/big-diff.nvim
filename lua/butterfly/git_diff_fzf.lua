@@ -479,7 +479,9 @@ function M.pick(opts)
 				picker:close()
 				if item then
 					vim.cmd('edit ' .. vim.fn.fnameescape(item.file))
-					vim.api.nvim_win_set_cursor(0, { item.line, 0 })
+					local line_count = vim.api.nvim_buf_line_count(0)
+					local target_line = math.max(1, math.min(item.line, line_count))
+					vim.api.nvim_win_set_cursor(0, { target_line, 0 })
 				end
 			end,
 		}
