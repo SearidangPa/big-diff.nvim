@@ -371,11 +371,15 @@ function M.pick(opts)
     local children = {}
 
     for _, j in ipairs(jumps) do
-      local key = tostring(j.line) .. ':' .. tostring(j.col)
+      local scope = get_scope_at_line(file, j.line)
+
+      -- Prefer de-duping by scope name ("per function"), since jumplist entries
+      -- often land multiple times within the same function/method.
+      local key = scope and scope.name or ('line:' .. tostring(j.line) .. ':' .. tostring(j.col))
+
       if not seen[key] then
         seen[key] = true
 
-        local scope = get_scope_at_line(file, j.line)
         local context_line = nil
         if not scope then
           context_line = get_context_line(file, j.line)
