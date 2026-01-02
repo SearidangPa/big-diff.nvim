@@ -5,8 +5,5 @@ M.setup = function()
 	require('butterfly.git_diff_fzf')
 end
 
-local function foo()
-
-end
 
 return M
