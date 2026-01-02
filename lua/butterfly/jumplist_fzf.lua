@@ -82,7 +82,15 @@ local function get_scope_at_line(filepath, line)
 
         for child in node:iter_children() do
           local child_type = child:type()
-          if child_type == 'name' or child_type == 'identifier' or child_type == 'field_identifier' or child_type == 'type_identifier' then
+          if
+            child_type == 'name'
+            or child_type == 'identifier'
+            or child_type == 'field_identifier'
+            or child_type == 'type_identifier'
+            -- Lua: `function M.pick(...)` / `function M:pick(...)`
+            or child_type == 'dot_index_expression'
+            or child_type == 'method_index_expression'
+          then
             name = vim.treesitter.get_node_text(child, bufnr)
             break
           end
