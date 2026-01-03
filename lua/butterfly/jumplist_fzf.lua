@@ -29,11 +29,6 @@ local function load_file_buffer(abs_path)
   return bufnr
 end
 
----@class ScopeInfo
----@field name string
----@field signature string
----@field kind string
-
 ---@param filepath string
 ---@param line number
 ---@return ScopeInfo?
@@ -83,13 +78,13 @@ local function get_scope_at_line(filepath, line)
         for child in node:iter_children() do
           local child_type = child:type()
           if
-            child_type == 'name'
-            or child_type == 'identifier'
-            or child_type == 'field_identifier'
-            or child_type == 'type_identifier'
-            -- Lua: `function M.pick(...)` / `function M:pick(...)`
-            or child_type == 'dot_index_expression'
-            or child_type == 'method_index_expression'
+              child_type == 'name'
+              or child_type == 'identifier'
+              or child_type == 'field_identifier'
+              or child_type == 'type_identifier'
+              -- Lua: `function M.pick(...)` / `function M:pick(...)`
+              or child_type == 'dot_index_expression'
+              or child_type == 'method_index_expression'
           then
             name = vim.treesitter.get_node_text(child, bufnr)
             break
@@ -439,8 +434,8 @@ function M.pick(opts)
         {
           box = 'vertical',
           width = vim.o.columns,
-          { win = 'input', height = 1, border = 'bottom' },
-          { win = 'list', border = 'none' },
+          { win = 'input', height = 1,     border = 'bottom' },
+          { win = 'list',  border = 'none' },
         },
       },
     },

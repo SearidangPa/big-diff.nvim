@@ -69,11 +69,6 @@ local function load_file_buffer(abs_path)
   return bufnr
 end
 
----@class ScopeInfo
----@field name string
----@field signature string
----@field kind string
-
 ---@param filepath string
 ---@param line number
 ---@return ScopeInfo?, boolean?
