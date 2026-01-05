@@ -49,7 +49,7 @@ local function format_item(item, _)
   return ctx.format_item(item, { header_hl_group = 'GitDiffFzfFilename' })
 end
 
----@param opts? { base?: string, file?: string, exclude_tests?: boolean }
+---@param opts? { base?: string, file?: string, exclude_tests?: boolean, only_tests?: boolean }
 function M.pick(opts)
   opts = opts or {}
   local base = opts.base or 'HEAD'
@@ -68,13 +68,23 @@ function M.pick(opts)
     local file_order = {}
 
     for _, hunk in ipairs(hunks) do
-      if not (opts.exclude_tests and is_test_path(hunk.file)) then
-        if not by_file[hunk.file] then
-          by_file[hunk.file] = {}
-          table.insert(file_order, hunk.file)
-        end
-        table.insert(by_file[hunk.file], hunk)
+      local is_test = is_test_path(hunk.file)
+
+      if opts.only_tests and not is_test then
+        goto continue
       end
+
+      if opts.exclude_tests and is_test then
+        goto continue
+      end
+
+      if not by_file[hunk.file] then
+        by_file[hunk.file] = {}
+        table.insert(file_order, hunk.file)
+      end
+      table.insert(by_file[hunk.file], hunk)
+
+      ::continue::
     end
 
     local items = {}
@@ -189,6 +199,12 @@ vim.keymap.set('n', '<leader>gg', function()
     require('butterfly.git_diff_fzf').pick { base = branch, exclude_tests = true }
   end)
 end, { desc = 'Git Diff w/ context (vs default branch)' })
+
+vim.keymap.set('n', '<leader>gt', function()
+  require('config.util_git').get_default_base_branch_async(function(branch)
+    require('butterfly.git_diff_fzf').pick { base = branch, only_tests = true }
+  end)
+end, { desc = 'Git Diff tests only (vs default branch)' })
 
 vim.keymap.set('n', '<leader>gf', function()
   local file = vim.fn.expand '%'
