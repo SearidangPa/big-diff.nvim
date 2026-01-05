@@ -2,6 +2,13 @@ local M = {}
 
 local ctx = require 'butterfly.utils_picker_context'
 
+local function is_test_path(file_path)
+  return file_path:match '[^%w]integration_tests[/\\]'
+    or file_path:match '[/\\]integration_tests[/\\]'
+    or file_path:match '_test%.[^/\\]+$'
+    or file_path:match '_spec%.lua$'
+end
+
 ---@param base? string
 ---@param this_file? string
 ---@param callback fun(hunks: table[])
@@ -42,7 +49,7 @@ local function format_item(item, _)
   return ctx.format_item(item, { header_hl_group = 'GitDiffFzfFilename' })
 end
 
----@param opts? { base?: string, file?: string }
+---@param opts? { base?: string, file?: string, exclude_tests?: boolean }
 function M.pick(opts)
   opts = opts or {}
   local base = opts.base or 'HEAD'
@@ -54,7 +61,6 @@ function M.pick(opts)
     file_name_hl = '#5E8C4A'
   end
 
-
   vim.api.nvim_set_hl(0, 'GitDiffFzfFilename', { fg = file_name_hl, bold = true })
 
   get_diff_hunks(base, opts.file, function(hunks)
@@ -62,11 +68,13 @@ function M.pick(opts)
     local file_order = {}
 
     for _, hunk in ipairs(hunks) do
-      if not by_file[hunk.file] then
-        by_file[hunk.file] = {}
-        table.insert(file_order, hunk.file)
+      if not (opts.exclude_tests and is_test_path(hunk.file)) then
+        if not by_file[hunk.file] then
+          by_file[hunk.file] = {}
+          table.insert(file_order, hunk.file)
+        end
+        table.insert(by_file[hunk.file], hunk)
       end
-      table.insert(by_file[hunk.file], hunk)
     end
 
     local items = {}
@@ -158,8 +166,8 @@ function M.pick(opts)
           {
             box = 'vertical',
             width = vim.o.columns,
-            { win = 'input', height = 1,     border = 'bottom' },
-            { win = 'list',  border = 'none' },
+            { win = 'input', height = 1, border = 'bottom' },
+            { win = 'list', border = 'none' },
           },
         },
       },
@@ -178,7 +186,7 @@ end
 
 vim.keymap.set('n', '<leader>gg', function()
   require('config.util_git').get_default_base_branch_async(function(branch)
-    require('butterfly.git_diff_fzf').pick { base = branch }
+    require('butterfly.git_diff_fzf').pick { base = branch, exclude_tests = true }
   end)
 end, { desc = 'Git Diff w/ context (vs default branch)' })
 
