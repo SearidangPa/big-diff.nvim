@@ -13,6 +13,23 @@ M.ignored_context_node_types_by_filetype = {
   go = { 'import_declaration', 'import_spec', 'import_spec_list' },
 }
 
+M.comment_node_types = {
+  'comment',
+  'block_comment',
+  'line_comment',
+}
+
+---@param node_type string
+---@return boolean
+local function is_comment_node_type(node_type)
+  for _, t in ipairs(M.comment_node_types) do
+    if node_type == t then
+      return true
+    end
+  end
+  return false
+end
+
 M.tree_icons = { vertical = '│ ', middle = '├╴', last = '└╴' }
 
 ---@param abs_path string
@@ -182,6 +199,58 @@ function M.get_scope_at_line(filepath, line, opts)
 
     if not ignored and is_go_build_tag_blank_line(row) then
       ignored = true
+    end
+  end
+
+  -- If on a comment node, look forward through siblings to find the nearest scope
+  local function find_scope_in_siblings(start_node)
+    local sibling = start_node:next_named_sibling()
+    while sibling do
+      local sibling_type = sibling:type()
+      for _, scope_type in ipairs(scope_node_types) do
+        if sibling_type == scope_type then
+          local name = nil
+          for child in sibling:iter_children() do
+            local child_type = child:type()
+            if
+              child_type == 'name'
+              or child_type == 'identifier'
+              or child_type == 'field_identifier'
+              or child_type == 'type_identifier'
+              or child_type == 'dot_index_expression'
+              or child_type == 'method_index_expression'
+            then
+              name = vim.treesitter.get_node_text(child, bufnr)
+              break
+            end
+          end
+          if name then
+            local signature = vim.treesitter.get_node_text(sibling, bufnr)
+            if sibling_type == 'type_spec' then
+              signature = 'type ' .. signature
+            end
+            return { name = name, signature = signature, kind = 'function' }
+          end
+        end
+      end
+      sibling = sibling:next_named_sibling()
+    end
+    return nil
+  end
+
+  if node and is_comment_node_type(node:type()) then
+    -- First try siblings at current level
+    local scope_from_sibling = find_scope_in_siblings(node)
+    if scope_from_sibling then
+      return scope_from_sibling, check_ignored and ignored or nil
+    end
+    -- If no sibling scope found, also check parent's siblings (for nested comments)
+    local parent = node:parent()
+    if parent and is_comment_node_type(parent:type()) then
+      scope_from_sibling = find_scope_in_siblings(parent)
+      if scope_from_sibling then
+        return scope_from_sibling, check_ignored and ignored or nil
+      end
     end
   end
 
