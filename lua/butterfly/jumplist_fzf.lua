@@ -209,7 +209,7 @@ vim.keymap.set('n', '<leader>jj', function()
   require('butterfly.jumplist_fzf').pick()
 end, { desc = 'Jumplist (cwd)' })
 
-vim.keymap.set('n', '<localleader>j', function()
+vim.keymap.set('n', '<leader>jf', function()
   require('butterfly.jumplist_fzf').pick { current_buf_only = true }
 end, { desc = 'Jumplist (buffer)' })
 
