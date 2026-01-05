@@ -71,7 +71,7 @@ local function format_item(item, _)
   })
 end
 
----@param opts? { cwd_only?: boolean }
+---@param opts? { current_buf_only?: boolean }
 function M.pick(opts)
   opts = opts or {}
 
@@ -79,6 +79,7 @@ function M.pick(opts)
 
   local cwd = vim.fn.getcwd()
   local list = vim.fn.getjumplist()[1] or {}
+  local cur_buf = opts.current_buf_only and vim.api.nvim_get_current_buf() or nil
 
   local by_file = {}
   local file_order = {}
@@ -88,23 +89,25 @@ function M.pick(opts)
     local line = tonumber(j.lnum) or 1
     local col = tonumber(j.col) or 1
 
-    local name = ''
-    if bufnr and bufnr ~= 0 then
-      name = vim.fn.bufname(bufnr)
-    end
+    if not cur_buf or bufnr == cur_buf then
+      local name = ''
+      if bufnr and bufnr ~= 0 then
+        name = vim.fn.bufname(bufnr)
+      end
 
-    if name and name ~= '' then
-      local abs = vim.fn.fnamemodify(name, ':p')
+      if name and name ~= '' then
+        local abs = vim.fn.fnamemodify(name, ':p')
 
-      local stat = vim.loop.fs_stat(abs)
-      local is_file = stat and stat.type == 'file'
+        local stat = vim.loop.fs_stat(abs)
+        local is_file = stat and stat.type == 'file'
 
-      if is_file and not is_excluded(bufnr, abs) and is_under_cwd(abs, cwd) then
-        if not by_file[abs] then
-          by_file[abs] = {}
-          table.insert(file_order, abs)
+        if is_file and not is_excluded(bufnr, abs) and is_under_cwd(abs, cwd) then
+          if not by_file[abs] then
+            by_file[abs] = {}
+            table.insert(file_order, abs)
+          end
+          table.insert(by_file[abs], { bufnr = bufnr, line = line, col = col })
         end
-        table.insert(by_file[abs], { bufnr = bufnr, line = line, col = col })
       end
     end
   end
@@ -194,13 +197,20 @@ function M.pick(opts)
       picker:close()
       if item then
         vim.cmd('edit ' .. vim.fn.fnameescape(item.file))
+        if item.line then
+          vim.api.nvim_win_set_cursor(0, { item.line, (item.col or 1) - 1 })
+        end
       end
     end,
   }
 end
 
-vim.keymap.set('n', '<leader>j', function()
+vim.keymap.set('n', '<leader>jj', function()
   require('butterfly.jumplist_fzf').pick()
 end, { desc = 'Jumplist (cwd)' })
+
+vim.keymap.set('n', '<localleader>j', function()
+  require('butterfly.jumplist_fzf').pick { current_buf_only = true }
+end, { desc = 'Jumplist (buffer)' })
 
 return M
