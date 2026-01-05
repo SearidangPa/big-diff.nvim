@@ -238,6 +238,22 @@ function M.get_scope_at_line(filepath, line, opts)
     return nil
   end
 
+  -- If on a blank line (node is source_file), look forward for comment or scope
+  if node and node:type() == 'source_file' then
+    for child in node:iter_children() do
+      local child_start_row = child:range()
+      if child_start_row >= row then
+        if is_comment_node_type(child:type()) then
+          local scope_from_sibling = find_scope_in_siblings(child)
+          if scope_from_sibling then
+            return scope_from_sibling, check_ignored and ignored or nil
+          end
+        end
+        break
+      end
+    end
+  end
+
   if node and is_comment_node_type(node:type()) then
     -- First try siblings at current level
     local scope_from_sibling = find_scope_in_siblings(node)

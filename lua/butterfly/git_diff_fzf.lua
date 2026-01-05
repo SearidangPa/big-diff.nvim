@@ -47,7 +47,15 @@ function M.pick(opts)
   opts = opts or {}
   local base = opts.base or 'HEAD'
 
-  vim.api.nvim_set_hl(0, 'GitDiffFzfFilename', { fg = '#AED28C' })
+  local file_name_hl
+  if vim.o.background == 'dark' then
+    file_name_hl = '#AED28C'
+  else
+    file_name_hl = '#5E8C4A'
+  end
+
+
+  vim.api.nvim_set_hl(0, 'GitDiffFzfFilename', { fg = file_name_hl, bold = true })
 
   get_diff_hunks(base, opts.file, function(hunks)
     local by_file = {}
