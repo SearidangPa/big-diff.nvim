@@ -46,7 +46,11 @@ function M.load_file_buffer(abs_path)
   end
 
   if vim.fn.bufloaded(bufnr) == 0 then
+    -- Suppress autocommands during buffer load to prevent screen flashing
+    local old_eventignore = vim.o.eventignore
+    vim.o.eventignore = 'all'
     vim.fn.bufload(bufnr)
+    vim.o.eventignore = old_eventignore
   end
 
   return bufnr
