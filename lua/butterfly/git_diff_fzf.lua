@@ -3,7 +3,8 @@ local M = {}
 local ctx = require 'butterfly.utils_picker_context'
 
 local function is_test_path(file_path)
-  return file_path:match '[^%w]integration_tests[/\\]'
+  return file_path:match '^integration_tests[/\\]'
+      or file_path:match '[^%w]integration_tests[/\\]'
       or file_path:match '[/\\]integration_tests[/\\]'
       or file_path:match '_test%.[^/\\]+$'
       or file_path:match '_spec%.lua$'
