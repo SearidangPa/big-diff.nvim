@@ -2,17 +2,11 @@ local M = {}
 
 local ctx = require 'butterfly.utils_picker_context'
 
--- Branch cache for speculative execution (survives module reload via vim.g)
-local function get_branch_cache()
-  vim.g._butterfly_branch_cache = vim.g._butterfly_branch_cache or {}
-  return vim.g._butterfly_branch_cache
-end
-
 local function is_test_path(file_path)
   return file_path:match '[^%w]integration_tests[/\\]'
-    or file_path:match '[/\\]integration_tests[/\\]'
-    or file_path:match '_test%.[^/\\]+$'
-    or file_path:match '_spec%.lua$'
+      or file_path:match '[/\\]integration_tests[/\\]'
+      or file_path:match '_test%.[^/\\]+$'
+      or file_path:match '_spec%.lua$'
 end
 
 ---@param base? string
@@ -182,8 +176,8 @@ local function process_hunks_and_show_picker(opts, base, hunks)
         {
           box = 'vertical',
           width = vim.o.columns,
-          { win = 'input', height = 1, border = 'bottom' },
-          { win = 'list', border = 'none' },
+          { win = 'input', height = 1,     border = 'bottom' },
+          { win = 'list',  border = 'none' },
         },
       },
     },
@@ -199,14 +193,6 @@ local function process_hunks_and_show_picker(opts, base, hunks)
   }
 end
 
----Pick with pre-fetched hunks (used by speculative execution)
----@param opts { exclude_tests?: boolean, only_tests?: boolean, file?: string }
----@param base string
----@param hunks table[]
-function M.pick_with_hunks(opts, base, hunks)
-  process_hunks_and_show_picker(opts, base, hunks)
-end
-
 ---@param opts? { base?: string, file?: string, exclude_tests?: boolean, only_tests?: boolean }
 function M.pick(opts)
   opts = opts or {}
@@ -217,73 +203,17 @@ function M.pick(opts)
   end)
 end
 
----Speculative parallel fetch: start diff immediately while fetching branch
----@param opts { exclude_tests?: boolean, only_tests?: boolean, file?: string }
-local function pick_with_speculative_fetch(opts)
-  local util_git = require 'config.util_git'
-  local git_root = util_git.find_git_root()
-  if not git_root then
-    M.pick(vim.tbl_extend('force', opts, { base = 'main' }))
-    return
-  end
-
-  local cache = get_branch_cache()
-  local cached_branch = cache[git_root]
-
-  -- Fast path: branch is cached, just pick directly
-  if cached_branch then
-    M.pick(vim.tbl_extend('force', opts, { base = cached_branch }))
-    return
-  end
-
-  -- Speculative execution: start diff with 'main' while fetching actual branch
-  local speculative_branch = 'main'
-  local actual_branch = nil
-  local speculative_hunks = nil
-  local branch_resolved = false
-  local diff_resolved = false
-
-  local function try_finalize()
-    if not branch_resolved or not diff_resolved then
-      return
-    end
-
-    -- Cache the branch for future calls
-    cache[git_root] = actual_branch
-
-    if actual_branch == speculative_branch then
-      -- Lucky! Speculative execution was correct, use cached hunks
-      M.pick_with_hunks(opts, actual_branch, speculative_hunks)
-    else
-      -- Branch differs, need to fetch correct diff (rare, one-time cost)
-      get_diff_hunks(actual_branch, opts.file, function(hunks)
-        M.pick_with_hunks(opts, actual_branch, hunks)
-      end)
-    end
-  end
-
-  -- Start diff fetch immediately (speculative)
-  get_diff_hunks(speculative_branch, opts.file, function(hunks)
-    speculative_hunks = hunks
-    diff_resolved = true
-    try_finalize()
+vim.keymap.set('n', '<leader>gt', function()
+  require('config.util_git').get_default_base_branch_async(function(branch)
+    M.pick { base = branch, only_tests = true }
   end)
-
-  -- Fetch actual branch in parallel
-  util_git.get_default_base_branch_async(function(branch)
-    actual_branch = branch
-    branch_resolved = true
-    try_finalize()
-  end)
-end
+end, { desc = 'Git Diff tests only (vs default branch)' })
 
 vim.keymap.set('n', '<leader>gg', function()
-  pick_with_speculative_fetch { exclude_tests = true }
+  require('config.util_git').get_default_base_branch_async(function(branch)
+    M.pick { base = branch, exclude_tests = true }
+  end)
 end, { desc = 'Git Diff w/ context (vs default branch)' })
-
-vim.keymap.set('n', '<leader>gt', function()
-  pick_with_speculative_fetch { only_tests = true }
-end, { desc = 'Git Diff tests only (vs default branch)' })
 
 vim.keymap.set('n', '<leader>gf', function()
   local file = vim.fn.expand '%'
@@ -291,7 +221,10 @@ vim.keymap.set('n', '<leader>gf', function()
     vim.notify('No file in current buffer', vim.log.levels.WARN)
     return
   end
-  pick_with_speculative_fetch { file = file }
+
+  require('config.util_git').get_default_base_branch_async(function(branch)
+    M.pick { base = branch, file = file }
+  end)
 end, { desc = 'Git Diff current file with default branch' })
 
 vim.keymap.set('n', '<leader>ge', function()
