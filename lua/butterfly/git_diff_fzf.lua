@@ -227,8 +227,18 @@ vim.keymap.set('n', '<leader>gf', function()
   end)
 end, { desc = 'Git Diff current file with default branch' })
 
-vim.keymap.set('n', '<leader>ge', function()
+vim.keymap.set('n', '<leader>e', function()
   require('butterfly.git_diff_fzf').pick { base = 'HEAD' }
 end, { desc = 'Git Diff w/ context (vs HEAD)' })
+
+vim.keymap.set('n', '<localleader>e', function()
+  local file = vim.fn.expand '%'
+  if not file or file == '' then
+    vim.notify('No file in current buffer', vim.log.levels.WARN)
+    return
+  end
+
+  require('butterfly.git_diff_fzf').pick { base = 'HEAD', file = file }
+end, { desc = 'Git Diff current file (vs HEAD)' })
 
 return M
