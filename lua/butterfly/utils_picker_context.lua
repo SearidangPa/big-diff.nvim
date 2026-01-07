@@ -447,7 +447,8 @@ function M.format_item(item, opts)
   local line_content = item.context_line or M.get_context_line(item.file, item.line)
 
   if not line_content then
-    return {}
+    ret[#ret + 1] = { '(new file)', 'Comment' }
+    return ret
   end
 
   Snacks.picker.highlight.format(item, line_content, ret, { lang = lang, ft = ft })

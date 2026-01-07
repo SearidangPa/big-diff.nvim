@@ -110,9 +110,12 @@ function M.pick(opts)
       local non_import_children = 0
 
       for _, hunk in ipairs(file_hunks) do
+        -- For new files (hunks starting at line 1), don't ignore build tags/imports
+        -- since they represent the entire file, not just a small change
+        local is_new_file_hunk = hunk.line == 1 and hunk.count > 10
         local scope, ignored = ctx.get_scope_at_line(hunk.file, hunk.line, { check_ignored = true })
 
-        if not ignored then
+        if is_new_file_hunk or not ignored then
           if not ft or ft == '' then
             local b = vim.fn.bufnr(vim.fn.fnamemodify(hunk.file, ':p'))
             if b ~= -1 then
