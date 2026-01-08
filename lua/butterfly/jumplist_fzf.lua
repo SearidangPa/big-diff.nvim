@@ -221,12 +221,12 @@ function M.pick(opts)
     })
 end
 
-vim.keymap.set("n", "<leader>jj", function()
-    require("butterfly.jumplist_fzf").pick()
-end, { desc = "Jumplist (cwd)" })
+function M.pick_cwd()
+    M.pick()
+end
 
-vim.keymap.set("n", "<leader>jf", function()
-    require("butterfly.jumplist_fzf").pick({ current_buf_only = true })
-end, { desc = "Jumplist (buffer)" })
+function M.pick_buffer()
+    M.pick({ current_buf_only = true })
+end
 
 return M

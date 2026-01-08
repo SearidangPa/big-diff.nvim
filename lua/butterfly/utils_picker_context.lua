@@ -62,7 +62,8 @@ local function compute_build_tag_lines(bufnr)
     local in_build_region = false
     for i, line in ipairs(lines) do
         if
-            line:match("^//%s*go:build%s+.+") or line:match("^//%s*%+build%s+.+")
+            line:match("^//%s*go:build%s+.+")
+            or line:match("^//%s*%+build%s+.+")
         then
             lines_map[i] = true -- 1-indexed
             in_build_region = true
@@ -497,14 +498,14 @@ function M.get_scope_at_line(filepath, line, opts)
 
                 local prev = vim.api.nvim_buf_get_lines(bufnr, r, r + 1, false)[1]
                     or ""
-                if prev:match("^%s*$") then
-                -- keep scanning upward
-                elseif
-                    prev:match("^//%s*go:build%s+.+")
-                    or prev:match("^//%s*%+build%s+.+")
-                then
-                    return true
-                else
+                if not prev:match("^%s*$") then
+                    if
+                        prev:match("^//%s*go:build%s+.+")
+                        or prev:match("^//%s*%+build%s+.+")
+                    then
+                        return true
+                    end
+
                     return false
                 end
             end

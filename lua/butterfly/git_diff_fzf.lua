@@ -36,14 +36,11 @@ local function get_diff_hunks(base, this_file, callback)
                 local start_line, count = line:match("^@@ .* %+(%d+),?(%d*)")
                 if start_line then
                     count = tonumber(count) or 1
-                    table.insert(
-                        hunks,
-                        {
-                            file = current_file,
-                            line = tonumber(start_line),
-                            count = count,
-                        }
-                    )
+                    table.insert(hunks, {
+                        file = current_file,
+                        line = tonumber(start_line),
+                        count = count,
+                    })
                 end
             end
         end
