@@ -45,6 +45,34 @@ local function is_comment_node_type(node_type)
     return false
 end
 
+local nvim_treesitter_loaded = false
+
+---@param bufnr integer
+---@param lang? string
+---@return vim.treesitter.LanguageTree?
+local function ensure_treesitter_parser(bufnr, lang)
+    if not nvim_treesitter_loaded then
+        local lazy_ok, lazy = pcall(require, "lazy")
+        if lazy_ok and lazy and type(lazy.load) == "function" then
+            pcall(lazy.load, { plugins = { "nvim-treesitter" } })
+        end
+
+        -- If the plugin is already on the runtimepath, this will succeed; if not,
+        -- we still gracefully fall back to no treesitter context.
+        pcall(require, "nvim-treesitter")
+        pcall(require, "nvim-treesitter.parsers")
+
+        nvim_treesitter_loaded = true
+    end
+
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr, lang)
+    if ok then
+        return parser
+    end
+
+    return nil
+end
+
 ---Pre-compute Go build tag lines (single pass at file load)
 ---@param bufnr integer
 ---@return table<number, boolean>
@@ -105,9 +133,8 @@ local function get_or_create_file_cache(abs_path)
         or M.DEFAULT_SCOPE_NODE_TYPES
 
     local parser, tree, root
-    local ok, p = pcall(vim.treesitter.get_parser, bufnr)
-    if ok and p then
-        parser = p
+    parser = ensure_treesitter_parser(bufnr, lang)
+    if parser then
         tree = parser:parse()[1]
         root = tree and tree:root() or nil
     end
@@ -444,8 +471,10 @@ function M.get_scope_at_line(filepath, line, opts)
         end
     end
 
-    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
-    if not ok or not parser then
+    local lang = ft and (vim.treesitter.language.get_lang(ft) or ft) or nil
+
+    local parser = ensure_treesitter_parser(bufnr, lang)
+    if not parser then
         return nil, check_ignored and false or nil
     end
 

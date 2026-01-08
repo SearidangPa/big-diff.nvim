@@ -10,8 +10,7 @@ local M = {}
 ---@field keymaps? ButterflyKeymapSpec[]
 
 ---@param opts? ButterflySetupOpts
-M.setup = function(opts)
-    opts = opts or {}
+M.setup = function()
     require("butterfly.jumplist_fzf")
     require("butterfly.git_diff_fzf")
 end
