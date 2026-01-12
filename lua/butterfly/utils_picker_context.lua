@@ -790,7 +790,7 @@ function M.format_item(item, opts)
     ret[#ret + 1] = { icon, "SnacksPickerTree" }
     ret[#ret + 1] = { " " }
 
-    local truncate = require("config.util_truncate").truncate_middle
+    local truncate = require("butterfly.util_truncate").truncate_middle
     local filename = truncate(vim.fn.fnamemodify(item.file, ":t"))
     ret[#ret + 1] = { filename, "Comment" }
     ret[#ret + 1] = { ": ", "Comment" }
