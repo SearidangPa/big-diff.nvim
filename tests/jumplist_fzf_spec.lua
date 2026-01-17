@@ -5,7 +5,6 @@ local eq = assert.are.same
 
 describe("jumplist_fzf", function()
     local tmpdir
-    local original = {}
     local created_buffers = {}
 
     local function create_file(name, lines)
@@ -19,31 +18,15 @@ describe("jumplist_fzf", function()
     before_each(function()
         tmpdir = vim.fn.tempname()
         vim.fn.mkdir(tmpdir, "p")
-
-        original.resolve_ft_and_lang = ctx.resolve_ft_and_lang
-        original.get_scope_at_line = ctx.get_scope_at_line
-        original.get_context_line = ctx.get_context_line
-
-        ctx.resolve_ft_and_lang = function()
-            return "lua", "lua"
-        end
-        ctx.get_scope_at_line = function()
-            return nil
-        end
-        ctx.get_context_line = function()
-            return "context"
-        end
     end)
 
     after_each(function()
-        ctx.resolve_ft_and_lang = original.resolve_ft_and_lang
-        ctx.get_scope_at_line = original.get_scope_at_line
-        ctx.get_context_line = original.get_context_line
-
         for _, bufnr in ipairs(created_buffers) do
             pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
         end
         created_buffers = {}
+
+        ctx.clear_file_cache()
 
         if tmpdir and tmpdir ~= "" then
             vim.fn.delete(tmpdir, "rf")
