@@ -136,16 +136,8 @@ local function format_item(item, opts)
     return ret
 end
 
----@param opts? { current_buf_only?: boolean }
-function M.pick(opts)
+function M._build_jump_items(opts, list, cwd, cur_buf)
     opts = opts or {}
-
-    vim.api.nvim_set_hl(0, "JumpFzfFilename", { fg = "#AED28C" })
-
-    local cwd = vim.fn.getcwd()
-    local list = vim.fn.getjumplist()[1] or {}
-    local cur_buf = opts.current_buf_only and vim.api.nvim_get_current_buf()
-        or nil
 
     local by_file = {}
     local file_order = {}
@@ -275,6 +267,27 @@ function M.pick(opts)
             end
         end
     end
+
+    return items, label_actions, label_keys
+end
+
+---@param opts? { current_buf_only?: boolean }
+function M.pick(opts)
+    opts = opts or {}
+
+    vim.api.nvim_set_hl(0, "JumpFzfFilename", { fg = "#AED28C" })
+
+    local cwd = vim.fn.getcwd()
+    local list = vim.fn.getjumplist()[1] or {}
+    local cur_buf = opts.current_buf_only and vim.api.nvim_get_current_buf()
+        or nil
+
+    local items, label_actions, label_keys = M._build_jump_items(
+        opts,
+        list,
+        cwd,
+        cur_buf
+    )
 
     Snacks.picker({
         title = "Jumplist (cwd)",
