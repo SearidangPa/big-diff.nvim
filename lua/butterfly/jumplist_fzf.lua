@@ -3,6 +3,58 @@ local M = {}
 local ctx = require("butterfly.utils_picker_context")
 
 local EXCLUDED_FILETYPES = { "help", "oil" }
+local JUMP_LABELS = "abcdefghijklmnopqrstuvwxyz"
+
+local function build_label_actions()
+    local actions = {}
+    local keys = {}
+
+    for i = 1, #JUMP_LABELS do
+        local label = JUMP_LABELS:sub(i, i)
+        local action_name = "jump_label_" .. label
+        actions[action_name] = function(picker)
+            local target_idx = nil
+            for item, idx in picker:iter() do
+                if item and item.jump_label == label then
+                    target_idx = idx
+                    break
+                end
+            end
+
+            if not target_idx then
+                return
+            end
+
+            picker.list:view(target_idx)
+            picker:action("confirm")
+        end
+        keys["<M-" .. label .. ">"] = { action_name, mode = { "i", "n" } }
+    end
+
+    return actions, keys
+end
+
+local function assign_jump_labels(picker)
+    if not picker or picker.closed then
+        return
+    end
+
+    local label_idx = 0
+    for item in picker:iter() do
+        if item.is_header then
+            item.jump_label = nil
+        else
+            label_idx = label_idx + 1
+            if label_idx <= #JUMP_LABELS then
+                item.jump_label = JUMP_LABELS:sub(label_idx, label_idx)
+            else
+                item.jump_label = nil
+            end
+        end
+    end
+
+    picker.list:update({ force = true })
+end
 
 ---@param abs_path string
 ---@param cwd string
@@ -65,10 +117,21 @@ local EXTRA_HIGHLIGHTS = {
 }
 
 local function format_item(item, _)
-    return ctx.format_item(item, {
+    local ret = ctx.format_item(item, {
         header_hl_group = "JumpFzfFilename",
         extra_highlights = EXTRA_HIGHLIGHTS,
     })
+
+    if item.jump_label then
+        ret[#ret + 1] = {
+            col = 0,
+            virt_text = { { item.jump_label, "SnacksPickerLabel" } },
+            virt_text_pos = "right_align",
+            hl_mode = "combine",
+        }
+    end
+
+    return ret
 end
 
 ---@param opts? { current_buf_only?: boolean }
@@ -121,6 +184,7 @@ function M.pick(opts)
     end
 
     local items = {}
+    local label_actions, label_keys = build_label_actions()
 
     for _, file in ipairs(file_order) do
         local jumps = by_file[file]
@@ -191,6 +255,32 @@ function M.pick(opts)
         title = "Jumplist (cwd)",
         items = items,
         format = format_item,
+        matcher = {
+            keep_parents = true,
+            sort = false,
+        },
+        actions = label_actions,
+        win = {
+            input = {
+                keys = label_keys,
+            },
+        },
+        on_show = function(picker)
+            if picker._jump_label_attached then
+                return
+            end
+            picker._jump_label_attached = true
+
+            local prev_on_done = picker.matcher.opts.on_done
+            picker.matcher.opts.on_done = function(matcher)
+                if prev_on_done then
+                    prev_on_done(matcher)
+                end
+                assign_jump_labels(picker)
+            end
+
+            assign_jump_labels(picker)
+        end,
         layout = {
             layout = {
                 box = "horizontal",
