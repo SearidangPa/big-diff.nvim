@@ -282,18 +282,17 @@ function M.pick(opts)
     local cur_buf = opts.current_buf_only and vim.api.nvim_get_current_buf()
         or nil
 
-    local items, label_actions, label_keys = M._build_jump_items(
-        opts,
-        list,
-        cwd,
-        cur_buf
-    )
+    local items, label_actions, label_keys =
+        M._build_jump_items(opts, list, cwd, cur_buf)
 
     Snacks.picker({
         title = "Jumplist (cwd)",
         items = items,
         format = function(item)
-            return format_item(item, { show_filename = not opts.current_buf_only })
+            return format_item(
+                item,
+                { show_filename = not opts.current_buf_only }
+            )
         end,
         matcher = {
             keep_parents = true,
