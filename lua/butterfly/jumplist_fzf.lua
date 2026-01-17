@@ -149,6 +149,7 @@ function M.pick(opts)
 
     local by_file = {}
     local file_order = {}
+    local max_jumps_per_file = opts.current_buf_only and nil or 5
 
     for _, j in ipairs(list) do
         local bufnr = j.bufnr
@@ -204,7 +205,9 @@ function M.pick(opts)
         local seen = {}
         local children = {}
 
-        for _, j in ipairs(jumps) do
+        local idx = #jumps
+        while idx >= 1 do
+            local j = jumps[idx]
             local scope = ctx.get_scope_at_line(
                 file,
                 j.line,
@@ -244,7 +247,21 @@ function M.pick(opts)
                     text = text,
                     parent = file_item,
                 })
+
+                if max_jumps_per_file and #children >= max_jumps_per_file then
+                    break
+                end
             end
+
+            idx = idx - 1
+        end
+
+        if max_jumps_per_file and #children > 1 then
+            local reversed = {}
+            for i = #children, 1, -1 do
+                reversed[#reversed + 1] = children[i]
+            end
+            children = reversed
         end
 
         if #children > 0 then
