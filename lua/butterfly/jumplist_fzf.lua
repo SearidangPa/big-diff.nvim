@@ -64,10 +64,12 @@ local EXTRA_HIGHLIGHTS = {
     ["%f[%w]function%f[%W]%s+[_%a][_%w]*:[_%a][_%w]*"] = "@function.method",
 }
 
-local function format_item(item, _)
+local function format_item(item, opts)
+    opts = opts or {}
     return ctx.format_item(item, {
         header_hl_group = "JumpFzfFilename",
         extra_highlights = EXTRA_HIGHLIGHTS,
+        show_filename = opts.show_filename,
     })
 end
 
@@ -162,6 +164,10 @@ function M.pick(opts)
                 end
 
                 local search_text = scope and scope.name or context_line or key
+                local text = search_text
+                if not opts.current_buf_only then
+                    text = shorten_path(file) .. " " .. search_text
+                end
 
                 table.insert(children, {
                     file = file,
@@ -171,14 +177,16 @@ function M.pick(opts)
                     context_line = context_line,
                     ft = ft,
                     lang = lang,
-                    text = shorten_path(file) .. " " .. search_text,
+                    text = text,
                     parent = file_item,
                 })
             end
         end
 
         if #children > 0 then
-            table.insert(items, file_item)
+            if not opts.current_buf_only then
+                table.insert(items, file_item)
+            end
 
             children[#children].last = true
             for _, child in ipairs(children) do
@@ -190,7 +198,9 @@ function M.pick(opts)
     Snacks.picker({
         title = "Jumplist (cwd)",
         items = items,
-        format = format_item,
+        format = function(item)
+            return format_item(item, { show_filename = not opts.current_buf_only })
+        end,
         layout = {
             layout = {
                 box = "horizontal",

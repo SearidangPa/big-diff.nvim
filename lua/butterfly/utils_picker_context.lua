@@ -775,12 +775,17 @@ function M.get_context_line(filepath, line, opts)
 end
 
 ---@param item table
----@param opts { header_hl_group: string, extra_highlights?: table }
+---@param opts { header_hl_group: string, extra_highlights?: table, show_filename?: boolean }
 ---@return snacks.picker.Highlight[]
 function M.format_item(item, opts)
     local ret = {} ---@type snacks.picker.Highlight[]
 
+    local show_filename = opts.show_filename ~= false
+
     if item.is_header then
+        if not show_filename then
+            return ret
+        end
         local filename = vim.fn.fnamemodify(item.file, ":t")
         ret[#ret + 1] = { filename, opts.header_hl_group }
         return ret
@@ -790,10 +795,12 @@ function M.format_item(item, opts)
     ret[#ret + 1] = { icon, "SnacksPickerTree" }
     ret[#ret + 1] = { " " }
 
-    local truncate = require("butterfly.util_truncate").truncate_middle
-    local filename = truncate(vim.fn.fnamemodify(item.file, ":t"))
-    ret[#ret + 1] = { filename, "Comment" }
-    ret[#ret + 1] = { ": ", "Comment" }
+    if show_filename then
+        local truncate = require("butterfly.util_truncate").truncate_middle
+        local filename = truncate(vim.fn.fnamemodify(item.file, ":t"))
+        ret[#ret + 1] = { filename, "Comment" }
+        ret[#ret + 1] = { ": ", "Comment" }
+    end
 
     local lang = item.lang
     local ft = item.ft
