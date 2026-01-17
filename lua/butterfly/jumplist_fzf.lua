@@ -211,10 +211,28 @@ function M.pick(opts)
             if item then
                 vim.cmd("edit " .. vim.fn.fnameescape(item.file))
                 if item.line then
-                    vim.api.nvim_win_set_cursor(
+                    local line = tonumber(item.line) or 1
+                    local line_count = vim.api.nvim_buf_line_count(0)
+                    if line < 1 then
+                        line = 1
+                    elseif line > line_count then
+                        line = line_count
+                    end
+
+                    local col = tonumber(item.col) or 1
+                    local line_text = vim.api.nvim_buf_get_lines(
                         0,
-                        { item.line, (item.col or 1) - 1 }
-                    )
+                        line - 1,
+                        line,
+                        false
+                    )[1] or ""
+                    local max_col = #line_text
+                    local col0 = col - 1
+                    if col0 < 0 or col0 > max_col then
+                        col0 = 0
+                    end
+
+                    vim.api.nvim_win_set_cursor(0, { line, col0 })
                 end
             end
         end,
