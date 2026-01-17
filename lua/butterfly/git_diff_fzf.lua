@@ -104,8 +104,12 @@ local function get_diff_hunks(base, this_file, callback)
     end)
 end
 
-local function format_item(item, _)
-    local ret = ctx.format_item(item, { header_hl_group = "GitDiffFzfFilename" })
+local function format_item(item, opts)
+    opts = opts or {}
+    local ret = ctx.format_item(item, {
+        header_hl_group = "GitDiffFzfFilename",
+        show_filename = opts.show_filename,
+    })
 
     if item.jump_label then
         ret[#ret + 1] = {
@@ -245,7 +249,9 @@ local function process_hunks_and_show_picker(opts, base, hunks)
     Snacks.picker({
         title = "Git Diff: " .. base,
         items = items,
-        format = format_item,
+        format = function(item)
+            return format_item(item, { show_filename = not opts.file })
+        end,
         matcher = {
             keep_parents = true,
             sort = false,
