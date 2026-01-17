@@ -34,7 +34,15 @@ describe("jumplist_fzf", function()
     end)
 
     it("orders and caps jumps per file", function()
-        local path, bufnr = create_file("one.lua", { "local a = 1" })
+        local path, bufnr = create_file("one.lua", {
+            "local function jump_1() end",
+            "local function jump_2() end",
+            "local function jump_3() end",
+            "local function jump_4() end",
+            "local function jump_5() end",
+            "local function jump_6() end",
+            "local function jump_7() end",
+        })
         local list = {}
         for i = 1, 7 do
             list[#list + 1] = { bufnr = bufnr, lnum = i, col = 1 }
@@ -52,5 +60,29 @@ describe("jumplist_fzf", function()
         end
         eq({ 3, 4, 5, 6, 7 }, lines)
         eq(true, items[#items].last)
+    end)
+
+    it("groups jumps by scope", function()
+        local _, bufnr = create_file("two.lua", {
+            "local function alpha()",
+            "  local x = 1",
+            "  local y = 2",
+            "end",
+            "",
+            "local function beta()",
+            "  local z = 3",
+            "end",
+        })
+        local list = {
+            { bufnr = bufnr, lnum = 2, col = 1 },
+            { bufnr = bufnr, lnum = 3, col = 1 },
+            { bufnr = bufnr, lnum = 7, col = 1 },
+        }
+
+        local items = jumplist._build_jump_items({}, list, tmpdir, nil)
+
+        eq(3, #items)
+        eq(true, items[1].is_header)
+        eq({ 3, 7 }, { items[2].line, items[3].line })
     end)
 end)
