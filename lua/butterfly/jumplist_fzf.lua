@@ -317,7 +317,11 @@ function M.pick(opts)
                 if prev_on_done then
                     prev_on_done(matcher)
                 end
-                util_picker.regroup_by_parent(picker, matcher, not opts.current_buf_only)
+                util_picker.regroup_by_parent(
+                    picker,
+                    matcher,
+                    not opts.current_buf_only
+                )
                 assign_jump_labels(picker)
             end
 
