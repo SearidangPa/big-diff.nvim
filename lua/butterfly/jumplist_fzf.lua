@@ -122,6 +122,7 @@ local function format_item(item, opts)
         header_hl_group = "JumpFzfFilename",
         extra_highlights = EXTRA_HIGHLIGHTS,
         show_filename = opts.show_filename,
+        show_tree = opts.show_filename,
     })
 
     if item.jump_label then
@@ -296,7 +297,7 @@ function M.pick(opts)
         end,
         matcher = {
             keep_parents = true,
-            sort = false,
+            sort = opts.current_buf_only == true,
         },
         actions = label_actions,
         win = {

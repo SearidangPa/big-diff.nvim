@@ -109,6 +109,7 @@ local function format_item(item, opts)
     local ret = ctx.format_item(item, {
         header_hl_group = "GitDiffFzfFilename",
         show_filename = opts.show_filename,
+        show_tree = opts.show_filename,
     })
 
     if item.jump_label then
@@ -256,7 +257,7 @@ local function process_hunks_and_show_picker(opts, base, hunks)
         end,
         matcher = {
             keep_parents = true,
-            sort = false,
+            sort = opts.file ~= nil,
         },
         actions = label_actions,
         win = {

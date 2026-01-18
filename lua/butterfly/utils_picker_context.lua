@@ -775,12 +775,13 @@ function M.get_context_line(filepath, line, opts)
 end
 
 ---@param item table
----@param opts { header_hl_group: string, extra_highlights?: table, show_filename?: boolean }
+---@param opts { header_hl_group: string, extra_highlights?: table, show_filename?: boolean, show_tree?: boolean }
 ---@return snacks.picker.Highlight[]
 function M.format_item(item, opts)
     local ret = {} ---@type snacks.picker.Highlight[]
 
     local show_filename = opts.show_filename ~= false
+    local show_tree = opts.show_tree ~= false
 
     if item.is_header then
         if not show_filename then
@@ -791,9 +792,11 @@ function M.format_item(item, opts)
         return ret
     end
 
-    local icon = item.last and M.tree_icons.last or M.tree_icons.middle
-    ret[#ret + 1] = { icon, "SnacksPickerTree" }
-    ret[#ret + 1] = { " " }
+    if show_tree then
+        local icon = item.last and M.tree_icons.last or M.tree_icons.middle
+        ret[#ret + 1] = { icon, "SnacksPickerTree" }
+        ret[#ret + 1] = { " " }
+    end
 
     if show_filename then
         local truncate = require("butterfly.util_truncate").truncate_middle
