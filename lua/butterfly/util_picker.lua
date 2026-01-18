@@ -14,7 +14,15 @@ function M.regroup_by_parent(picker, matcher, show_headers)
         return
     end
 
+    ---@class ButterflyPickerGroup
+    ---@field parent table|nil
+    ---@field items table[]
+    ---@field score number
+    ---@field min_idx number -- earliest source index for stable sorting
+
+    ---@type table<any, ButterflyPickerGroup>
     local groups = {}
+    ---@type ButterflyPickerGroup[]
     local group_list = {}
 
     local function ensure_group(key, parent, idx)
