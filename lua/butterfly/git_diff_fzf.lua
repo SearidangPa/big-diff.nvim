@@ -234,7 +234,9 @@ local function process_hunks_and_show_picker(opts, base, hunks)
         end
 
         if non_import_children > 0 then
-            table.insert(items, file_item)
+            if not opts.file then
+                table.insert(items, file_item)
+            end
 
             if #children > 0 then
                 children[#children].last = true
