@@ -2,6 +2,7 @@ local M = {}
 
 ---@class FileCache
 ---@field bufnr integer
+---@field changedtick integer
 ---@field ft string
 ---@field lang string?
 ---@field parser vim.treesitter.LanguageTree?
@@ -107,19 +108,10 @@ local function compute_build_tag_lines(bufnr)
     return lines_map
 end
 
----Get or create a file cache entry (parses treesitter once per file)
 ---@param abs_path string
----@return FileCache?
-local function get_or_create_file_cache(abs_path)
-    if file_cache[abs_path] then
-        return file_cache[abs_path]
-    end
-
-    local bufnr = M.load_file_buffer(abs_path)
-    if bufnr == -1 then
-        return nil
-    end
-
+---@param bufnr integer
+---@return table
+local function compute_file_cache_state(abs_path, bufnr)
     if vim.bo[bufnr].filetype == "" then
         local detected = vim.filetype.match({ filename = abs_path })
         if detected and detected ~= "" then
@@ -144,17 +136,61 @@ local function get_or_create_file_cache(abs_path)
         build_tag_lines = compute_build_tag_lines(bufnr)
     end
 
-    file_cache[abs_path] = {
-        bufnr = bufnr,
+    return {
+        changedtick = vim.api.nvim_buf_get_changedtick(bufnr),
         ft = ft,
         lang = lang,
         parser = parser,
         tree = tree,
         root = root,
         scope_node_types = scope_node_types,
-        scope_cache = {},
         build_tag_lines = build_tag_lines,
     }
+end
+
+---Get or create a file cache entry (parses treesitter once per file)
+---@param abs_path string
+---@return FileCache?
+local function get_or_create_file_cache(abs_path)
+    local existing = file_cache[abs_path]
+    if existing then
+        -- If the buffer was wiped and re-created, rebuild cache.
+        if not vim.api.nvim_buf_is_valid(existing.bufnr) then
+            file_cache[abs_path] = nil
+        else
+            local tick = vim.api.nvim_buf_get_changedtick(existing.bufnr)
+            if tick ~= existing.changedtick then
+                local bufnr = M.load_file_buffer(abs_path)
+                if bufnr == -1 then
+                    return nil
+                end
+
+                local state = compute_file_cache_state(abs_path, bufnr)
+
+                existing.bufnr = bufnr
+                existing.scope_cache = {}
+                for k, v in pairs(state) do
+                    existing[k] = v
+                end
+            end
+
+            return existing
+        end
+    end
+
+    local bufnr = M.load_file_buffer(abs_path)
+    if bufnr == -1 then
+        return nil
+    end
+
+    local state = compute_file_cache_state(abs_path, bufnr)
+
+    local cache = { bufnr = bufnr, scope_cache = {} }
+    for k, v in pairs(state) do
+        cache[k] = v
+    end
+
+    file_cache[abs_path] = cache
 
     return file_cache[abs_path]
 end

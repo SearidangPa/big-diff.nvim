@@ -86,4 +86,24 @@ describe("jumplist_fzf", function()
         eq({ 3, 7 }, { items[2].line, items[3].line })
         eq({ "alpha", "beta" }, { items[2].scope.name, items[3].scope.name })
     end)
+
+    it("refreshes cached scopes when buffer changes", function()
+        local path, bufnr = create_file("three.lua", {
+            "local function alpha()",
+            "  local x = 1",
+            "end",
+        })
+
+        local r1 = ctx.batch_get_scopes(path, { 2 })
+        eq("alpha", r1[2].scope.name)
+
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {
+            "local function beta()",
+            "  local x = 1",
+            "end",
+        })
+
+        local r2 = ctx.batch_get_scopes(path, { 2 })
+        eq("beta", r2[2].scope.name)
+    end)
 end)
