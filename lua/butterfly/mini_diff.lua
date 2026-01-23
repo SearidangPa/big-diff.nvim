@@ -56,8 +56,9 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     local current_line = nil
 
     for i, file in ipairs(files) do
+        local basename = vim.fn.fnamemodify(file, ":t:r")
         local display =
-            truncate.truncate_middle(file, { no_truncate_max = width })
+            truncate.truncate_middle(basename, { no_truncate_max = width })
         table.insert(lines, display)
 
         -- Check if this is the current file

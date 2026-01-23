@@ -65,9 +65,10 @@ function M.truncate_middle(str, opts)
     end
 
     local first = parts[1]:sub(1, opts.part_len)
+    local second = parts[2]:sub(1, opts.part_len)
     local second_last = parts[#parts - 1]:sub(1, opts.part_len)
     local last = parts[#parts]:sub(1, opts.part_len)
-    return table.concat({ first, second_last, last }, opts.joiner)
+    return table.concat({ first, second, second_last, last }, opts.joiner)
 end
 
 return M
