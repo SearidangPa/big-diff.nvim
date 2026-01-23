@@ -2,6 +2,8 @@ local M = {}
 local truncate = require("butterfly.util_truncate")
 local util_git = require("butterfly.util_git")
 
+local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
+
 local function setup_highlights()
     local cyan = vim.o.background == "dark" and "#35C9EB" or "#276983"
     vim.api.nvim_set_hl(0, "MiniDiffCurrentFile", { fg = cyan, bold = true })
@@ -71,24 +73,44 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
 
     -- Highlight current file (default to first file)
     local highlight_line = current_line or 1
-    vim.api.nvim_buf_add_highlight(
+    vim.api.nvim_buf_set_extmark(
         bufnr,
-        -1,
-        "MiniDiffCurrentFile",
+        highlight_ns,
         highlight_line - 1,
         0,
-        -1
+        {
+            hl_group = "MiniDiffCurrentFile",
+            hl_eol = true,
+        }
     )
 end
 
-local function setup_keymaps(bufnr, winnr, files, git_root)
+local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
     -- Open file on Enter
     vim.keymap.set("n", "<CR>", function()
         local line_nr = vim.api.nvim_win_get_cursor(0)[1]
         local file = files[line_nr]
         if file then
-            vim.api.nvim_win_close(winnr, true)
-            vim.cmd("edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+            util_git.get_diff_hunks(base, file, function(hunks)
+                local hunk_line = (hunks[1] and hunks[1].line) or 1
+                vim.api.nvim_set_current_win(main_win)
+                vim.cmd("edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+                local line_count = vim.api.nvim_buf_line_count(0)
+                local target_line = math.max(1, math.min(hunk_line, line_count))
+                vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+            end)
+            -- highlight the selected line
+            vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
+            vim.api.nvim_buf_set_extmark(
+                bufnr,
+                highlight_ns,
+                line_nr - 1,
+                0,
+                {
+                    hl_group = "MiniDiffCurrentFile",
+                    hl_eol = true,
+                }
+            )
         end
     end, { buffer = bufnr, nowait = true })
 
@@ -113,7 +135,7 @@ function M.open(base)
         local current_win = vim.api.nvim_get_current_win()
         local bufnr, winnr = create_split_buffer()
         render_files(bufnr, winnr, files, current_file, git_root)
-        setup_keymaps(bufnr, winnr, files, git_root)
+        setup_keymaps(bufnr, winnr, files, git_root, current_win, base)
 
         -- Open first file and jump to first hunk
         local first_file = git_root .. "/" .. files[1]
