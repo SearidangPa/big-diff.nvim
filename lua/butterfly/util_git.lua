@@ -95,4 +95,44 @@ function M.get_default_base_branch_async(callback, opts)
     end)
 end
 
+---@param base? string
+---@param this_file? string
+---@param callback fun(hunks: table[])
+function M.get_diff_hunks(base, this_file, callback)
+    base = base or "HEAD"
+
+    local cmd = { "git", "diff", base, "--unified=0" }
+    if this_file and this_file ~= "" then
+        cmd[#cmd + 1] = "--"
+        cmd[#cmd + 1] = this_file
+    end
+
+    vim.system(cmd, { text = true }, function(obj)
+        local hunks = {}
+        local output = obj.stdout or ""
+        local current_file = nil
+
+        for line in output:gmatch("[^\n]+") do
+            local file = line:match("^%+%+%+ b/(.+)$")
+            if file then
+                current_file = file
+            elseif current_file then
+                local start_line, count = line:match("^@@ .* %+(%d+),?(%d*)")
+                if start_line then
+                    count = tonumber(count) or 1
+                    table.insert(hunks, {
+                        file = current_file,
+                        line = tonumber(start_line),
+                        count = count,
+                    })
+                end
+            end
+        end
+
+        vim.schedule(function()
+            callback(hunks)
+        end)
+    end)
+end
+
 return M

@@ -1,5 +1,6 @@
 local M = {}
 local truncate = require("butterfly.util_truncate")
+local util_git = require("butterfly.util_git")
 
 local function setup_highlights()
     local cyan = vim.o.background == "dark" and "#35C9EB" or "#276983"
@@ -41,8 +42,7 @@ local function create_split_buffer()
     vim.wo[winnr].foldcolumn = "0"
     vim.wo[winnr].winfixwidth = true
 
-    -- Width: 25% of total width
-    local width = math.floor(vim.o.columns * 0.25)
+    local width = math.floor(vim.o.columns * 0.2)
     vim.api.nvim_win_set_width(winnr, width)
 
     return bufnr, winnr
@@ -69,17 +69,16 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
 
-    -- Highlight current file
-    if current_line then
-        vim.api.nvim_buf_add_highlight(
-            bufnr,
-            -1,
-            "MiniDiffCurrentFile",
-            current_line - 1,
-            0,
-            -1
-        )
-    end
+    -- Highlight current file (default to first file)
+    local highlight_line = current_line or 1
+    vim.api.nvim_buf_add_highlight(
+        bufnr,
+        -1,
+        "MiniDiffCurrentFile",
+        highlight_line - 1,
+        0,
+        -1
+    )
 end
 
 local function setup_keymaps(bufnr, winnr, files, git_root)
@@ -116,9 +115,15 @@ function M.open(base)
         render_files(bufnr, winnr, files, current_file, git_root)
         setup_keymaps(bufnr, winnr, files, git_root)
 
-        -- Restore focus
-        vim.schedule(function()
+        -- Open first file and jump to first hunk
+        local first_file = git_root .. "/" .. files[1]
+        util_git.get_diff_hunks(base, files[1], function(hunks)
+            local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(current_win)
+            vim.cmd("edit " .. vim.fn.fnameescape(first_file))
+            local line_count = vim.api.nvim_buf_line_count(0)
+            local target_line = math.max(1, math.min(hunk_line, line_count))
+            vim.api.nvim_win_set_cursor(0, { target_line, 0 })
         end)
     end)
 end

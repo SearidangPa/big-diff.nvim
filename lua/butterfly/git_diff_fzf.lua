@@ -65,46 +65,6 @@ local function is_test_path(file_path)
         or file_path:match("_spec%.lua$")
 end
 
----@param base? string
----@param this_file? string
----@param callback fun(hunks: table[])
-local function get_diff_hunks(base, this_file, callback)
-    base = base or "HEAD"
-
-    local cmd = { "git", "diff", base, "--unified=0" }
-    if this_file and this_file ~= "" then
-        cmd[#cmd + 1] = "--"
-        cmd[#cmd + 1] = this_file
-    end
-
-    vim.system(cmd, { text = true }, function(obj)
-        local hunks = {}
-        local output = obj.stdout or ""
-        local current_file = nil
-
-        for line in output:gmatch("[^\n]+") do
-            local file = line:match("^%+%+%+ b/(.+)$")
-            if file then
-                current_file = file
-            elseif current_file then
-                local start_line, count = line:match("^@@ .* %+(%d+),?(%d*)")
-                if start_line then
-                    count = tonumber(count) or 1
-                    table.insert(hunks, {
-                        file = current_file,
-                        line = tonumber(start_line),
-                        count = count,
-                    })
-                end
-            end
-        end
-
-        vim.schedule(function()
-            callback(hunks)
-        end)
-    end)
-end
-
 local function format_item(item, opts)
     opts = opts or {}
     local ret = ctx.format_item(item, {
@@ -315,7 +275,7 @@ function M.pick(opts)
     opts = opts or {}
     local base = opts.base or "HEAD"
 
-    get_diff_hunks(base, opts.file, function(hunks)
+    util_git.get_diff_hunks(base, opts.file, function(hunks)
         process_hunks_and_show_picker(opts, base, hunks)
     end)
 end
