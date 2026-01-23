@@ -111,9 +111,15 @@ function M.open(base)
             return
         end
 
+        local current_win = vim.api.nvim_get_current_win()
         local bufnr, winnr = create_split_buffer()
         render_files(bufnr, winnr, files, current_file, git_root)
         setup_keymaps(bufnr, winnr, files, git_root)
+
+        -- Restore focus
+        vim.schedule(function()
+            vim.api.nvim_set_current_win(current_win)
+        end)
     end)
 end
 
