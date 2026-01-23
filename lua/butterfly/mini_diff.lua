@@ -79,8 +79,7 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
         highlight_line - 1,
         0,
         {
-            hl_group = "MiniDiffCurrentFile",
-            hl_eol = true,
+            line_hl_group = "MiniDiffCurrentFile",
         }
     )
 end
@@ -107,8 +106,7 @@ local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
                 line_nr - 1,
                 0,
                 {
-                    hl_group = "MiniDiffCurrentFile",
-                    hl_eol = true,
+                    line_hl_group = "MiniDiffCurrentFile",
                 }
             )
         end
