@@ -4,6 +4,8 @@ local ctx = require("butterfly.utils_picker_context")
 local util_git = require("butterfly.util_git")
 local util_picker = require("butterfly.util_picker")
 
+local jump_label_attached = setmetatable({}, { __mode = "k" })
+
 local JUMP_LABELS = "abcdefghijklmnopqrstuvwxyz"
 
 local function build_label_actions()
@@ -220,10 +222,10 @@ local function process_hunks_and_show_picker(opts, base, hunks)
             },
         },
         on_show = function(picker)
-            if picker._jump_label_attached then
+            if jump_label_attached[picker] then
                 return
             end
-            picker._jump_label_attached = true
+            jump_label_attached[picker] = true
 
             local prev_on_done = picker.matcher.opts.on_done
             picker.matcher.opts.on_done = function(matcher)

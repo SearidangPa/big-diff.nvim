@@ -3,6 +3,8 @@ local M = {}
 local ctx = require("butterfly.utils_picker_context")
 local util_picker = require("butterfly.util_picker")
 
+local jump_label_attached = setmetatable({}, { __mode = "k" })
+
 local EXCLUDED_FILETYPES = { "help", "oil" }
 local JUMP_LABELS = "abcdefghijklmnopqrstuvwxyz"
 
@@ -81,7 +83,7 @@ end
 ---@param bufnr integer
 ---@param abs_path string
 ---@return boolean
-local function is_excluded(bufnr, abs_path)
+local function is_excluded(bufnr, abs_path, exclude_current)
     if not abs_path or abs_path == "" then
         return true
     end
@@ -93,6 +95,12 @@ local function is_excluded(bufnr, abs_path)
     if bufnr and bufnr ~= -1 then
         local ft = vim.bo[bufnr].filetype
         if ft == "oil" or ft == "help" then
+            return true
+        end
+    end
+    if exclude_current then
+        local cur_buf = vim.api.nvim_get_current_buf()
+        if bufnr == cur_buf then
             return true
         end
     end
@@ -138,7 +146,7 @@ local function format_item(item, opts)
     return ret
 end
 
-function M._build_jump_items(opts, list, cwd, cur_buf)
+function M._build_jump_items(opts, list, cwd, cur_buf, exclude_current)
     opts = opts or {}
 
     local by_file = {}
@@ -164,7 +172,7 @@ function M._build_jump_items(opts, list, cwd, cur_buf)
 
                 if
                     is_file
-                    and not is_excluded(bufnr, abs)
+                    and not is_excluded(bufnr, abs, exclude_current)
                     and is_under_cwd(abs, cwd)
                 then
                     if not by_file[abs] then
@@ -282,8 +290,9 @@ function M.pick(opts)
     local cur_buf = opts.current_buf_only and vim.api.nvim_get_current_buf()
         or nil
 
+    local exclude_current = not opts.current_buf_only
     local items, label_actions, label_keys =
-        M._build_jump_items(opts, list, cwd, cur_buf)
+        M._build_jump_items(opts, list, cwd, cur_buf, exclude_current)
 
     Snacks.picker({
         title = "Jumplist (cwd)",
@@ -305,10 +314,10 @@ function M.pick(opts)
             },
         },
         on_show = function(picker)
-            if picker._jump_label_attached then
+            if jump_label_attached[picker] then
                 return
             end
-            picker._jump_label_attached = true
+            jump_label_attached[picker] = true
 
             local prev_on_done = picker.matcher.opts.on_done
             picker.matcher.opts.on_done = function(matcher)
