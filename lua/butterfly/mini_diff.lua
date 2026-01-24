@@ -4,11 +4,6 @@ local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
-local function setup_highlights()
-    local cyan = vim.o.background == "dark" and "#35C9EB" or "#276983"
-    vim.api.nvim_set_hl(0, "MiniDiffCurrentFile", { fg = cyan, bold = true })
-end
-
 local function get_diff_files(base, callback)
     local git_root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
     vim.system(
@@ -75,7 +70,7 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     -- Highlight current file (default to first file)
     local highlight_line = current_line or 1
     vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, highlight_line - 1, 0, {
-        line_hl_group = "MiniDiffCurrentFile",
+        line_hl_group = "ButterflyFileName",
     })
 end
 
@@ -96,7 +91,7 @@ local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
             -- highlight the selected line
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
             vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, line_nr - 1, 0, {
-                line_hl_group = "MiniDiffCurrentFile",
+                line_hl_group = "ButterflyFileName",
             })
         end
     end, { buffer = bufnr, nowait = true })

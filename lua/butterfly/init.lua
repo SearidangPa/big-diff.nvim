@@ -8,7 +8,7 @@ M.setup = function()
         require("butterfly.mini_diff").open(base)
     end, { nargs = "?" })
 
-    local file_name_hl = vim.o.background == "dark" and "#35C9EB" or "#276983"
+    local file_name_hl = vim.o.background == "dark" and "#9CCFD9" or "#276983"
     vim.api.nvim_set_hl(
         0,
         "ButterflyFileName",
