@@ -88,7 +88,7 @@ local function format_item(item, opts)
 end
 
 ---Process hunks and display picker (core logic extracted for reuse)
----@param opts { exclude_tests?: boolean, only_tests?: boolean, file?: string }
+---@param opts { exclude_tests?: boolean, only_tests?: boolean, file?: string, exclude_file?: string }
 ---@param base string
 ---@param hunks table[]
 local function process_hunks_and_show_picker(opts, base, hunks)
@@ -103,6 +103,10 @@ local function process_hunks_and_show_picker(opts, base, hunks)
         end
 
         if opts.exclude_tests and is_test then
+            goto continue
+        end
+
+        if opts.exclude_file and hunk.file == opts.exclude_file then
             goto continue
         end
 
@@ -265,7 +269,7 @@ local function process_hunks_and_show_picker(opts, base, hunks)
     })
 end
 
----@param opts? { base?: string, file?: string, exclude_tests?: boolean, only_tests?: boolean }
+---@param opts? { base?: string, file?: string, exclude_tests?: boolean, only_tests?: boolean, exclude_file?: string }
 function M.pick(opts)
     opts = opts or {}
     local base = opts.base or "HEAD"
@@ -285,7 +289,7 @@ local function resolve_current_file(file)
     return file
 end
 
----@param opts? { file?: string, exclude_tests?: boolean, only_tests?: boolean, fallback?: string }
+---@param opts? { file?: string, exclude_tests?: boolean, only_tests?: boolean, fallback?: string, exclude_file?: string }
 function M.pick_vs_default_branch(opts)
     opts = opts or {}
     util_git.get_default_base_branch_async(function(branch)
@@ -294,16 +298,19 @@ function M.pick_vs_default_branch(opts)
             file = opts.file,
             exclude_tests = opts.exclude_tests,
             only_tests = opts.only_tests,
+            exclude_file = opts.exclude_file,
         })
     end, { fallback = opts.fallback })
 end
 
 function M.pick_tests_vs_default_branch()
-    M.pick_vs_default_branch({ only_tests = true })
+    local resolved = resolve_current_file()
+    M.pick_vs_default_branch({ only_tests = true, exclude_file = resolved })
 end
 
 function M.pick_context_vs_default_branch()
-    M.pick_vs_default_branch({ exclude_tests = true })
+    local resolved = resolve_current_file()
+    M.pick_vs_default_branch({ exclude_tests = true, exclude_file = resolved })
 end
 
 ---@param file? string
@@ -317,7 +324,7 @@ function M.pick_file_vs_default_branch(file)
     M.pick_vs_default_branch({ file = resolved })
 end
 
----@param opts? { file?: string, exclude_tests?: boolean, only_tests?: boolean }
+---@param opts? { file?: string, exclude_tests?: boolean, only_tests?: boolean, exclude_file?: string }
 function M.pick_vs_head(opts)
     opts = opts or {}
     M.pick({
@@ -325,6 +332,7 @@ function M.pick_vs_head(opts)
         file = opts.file,
         exclude_tests = opts.exclude_tests,
         only_tests = opts.only_tests,
+        exclude_file = opts.exclude_file,
     })
 end
 
