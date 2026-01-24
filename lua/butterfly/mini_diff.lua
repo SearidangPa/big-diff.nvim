@@ -74,15 +74,9 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
 
     -- Highlight current file (default to first file)
     local highlight_line = current_line or 1
-    vim.api.nvim_buf_set_extmark(
-        bufnr,
-        highlight_ns,
-        highlight_line - 1,
-        0,
-        {
-            line_hl_group = "MiniDiffCurrentFile",
-        }
-    )
+    vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, highlight_line - 1, 0, {
+        line_hl_group = "MiniDiffCurrentFile",
+    })
 end
 
 local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
@@ -101,15 +95,9 @@ local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
             end)
             -- highlight the selected line
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
-            vim.api.nvim_buf_set_extmark(
-                bufnr,
-                highlight_ns,
-                line_nr - 1,
-                0,
-                {
-                    line_hl_group = "MiniDiffCurrentFile",
-                }
-            )
+            vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, line_nr - 1, 0, {
+                line_hl_group = "MiniDiffCurrentFile",
+            })
         end
     end, { buffer = bufnr, nowait = true })
 

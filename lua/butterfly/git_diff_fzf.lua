@@ -90,7 +90,7 @@ end
 ---@param base string
 ---@param hunks table[]
 local function process_hunks_and_show_picker(opts, base, hunks)
-    local file_name_hl = vim.o.background == "dark" and "#AED28C" or "#5E8C4A"
+    local file_name_hl = vim.o.background == "dark" and "#35C9EB" or "#276983"
     vim.api.nvim_set_hl(
         0,
         "GitDiffFzfFilename",
