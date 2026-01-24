@@ -104,7 +104,6 @@ end
 
 function M.open(base)
     base = base or "HEAD"
-    setup_highlights()
 
     local current_file = vim.fn.expand("%:p")
 
