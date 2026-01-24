@@ -68,7 +68,7 @@ end
 local function format_item(item, opts)
     opts = opts or {}
     local ret = ctx.format_item(item, {
-        header_hl_group = "GitDiffFzfFilename",
+        header_hl_group = "ButterflyFileName",
         show_filename = opts.show_filename,
         show_tree = opts.show_filename,
     })
@@ -90,13 +90,6 @@ end
 ---@param base string
 ---@param hunks table[]
 local function process_hunks_and_show_picker(opts, base, hunks)
-    local file_name_hl = vim.o.background == "dark" and "#35C9EB" or "#276983"
-    vim.api.nvim_set_hl(
-        0,
-        "GitDiffFzfFilename",
-        { fg = file_name_hl, bold = true }
-    )
-
     local by_file = {}
     local file_order = {}
 

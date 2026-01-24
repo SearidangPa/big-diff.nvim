@@ -120,7 +120,7 @@ local EXTRA_HIGHLIGHTS = {
 local function format_item(item, opts)
     opts = opts or {}
     local ret = ctx.format_item(item, {
-        header_hl_group = "JumpFzfFilename",
+        header_hl_group = "ButterflyFileName",
         extra_highlights = EXTRA_HIGHLIGHTS,
         show_filename = opts.show_filename,
         show_tree = opts.show_filename,
@@ -276,8 +276,6 @@ end
 ---@param opts? { current_buf_only?: boolean }
 function M.pick(opts)
     opts = opts or {}
-
-    vim.api.nvim_set_hl(0, "JumpFzfFilename", { fg = "#AED28C" })
 
     local cwd = vim.fn.getcwd()
     local list = vim.fn.getjumplist()[1] or {}
