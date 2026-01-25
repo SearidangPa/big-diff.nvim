@@ -159,8 +159,9 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
             highlights[#lines] = "Comment"
 
             -- Check if this is the current file
-            local abs_path = git_root .. "/" .. entry.path
-            if abs_path == current_file then
+            local abs_path = vim.fs.normalize(git_root .. "/" .. entry.path)
+            local normalized_current = vim.fs.normalize(current_file)
+            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
                 current_line = #lines
             end
         end
@@ -211,11 +212,7 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
         end
     end
 
-    vim.schedule(function()
-        if vim.api.nvim_buf_is_valid(bufnr) then
-            highlight_current_file()
-        end
-    end)
+    highlight_current_file()
 
     return line_to_file, apply_line_highlights, highlight_current_file
 end
@@ -432,7 +429,7 @@ function M.open(base)
 
         local current_win = vim.api.nvim_get_current_win()
         local bufnr, winnr = create_split_buffer()
-        local line_to_file =
+        local line_to_file, apply_line_highlights, highlight_current_file =
             render_files(bufnr, winnr, files, current_file, git_root)
         local _, set_main_tab_map = setup_keymaps(
             bufnr,
@@ -441,7 +438,9 @@ function M.open(base)
             git_root,
             current_win,
             base,
-            line_to_file
+            line_to_file,
+            apply_line_highlights,
+            highlight_current_file
         )
 
         local first_file = git_root .. "/" .. files[1]
