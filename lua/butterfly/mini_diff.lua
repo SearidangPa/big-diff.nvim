@@ -260,12 +260,18 @@ local function setup_keymaps(
         util_git.get_diff_hunks(base, file, function(hunks)
             local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(main_win)
-            vim.cmd("noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+            vim.cmd(
+                "noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file)
+            )
+
+            vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
+
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
             fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             require("mini.diff").enable(0)
+            set_main_tab_map(vim.api.nvim_get_current_buf())
         end)
         if vim.api.nvim_buf_is_valid(bufnr) then
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
@@ -396,7 +402,7 @@ local function setup_keymaps(
         vim.api.nvim_win_close(winnr, true)
     end, { buffer = bufnr, nowait = true })
 
-    return open_next_file
+    return open_next_file, set_main_tab_map
 end
 
 function M.open(base)
@@ -420,7 +426,7 @@ function M.open(base)
         local bufnr, winnr = create_split_buffer()
         local line_to_file =
             render_files(bufnr, winnr, files, current_file, git_root)
-        setup_keymaps(
+        local _, set_main_tab_map = setup_keymaps(
             bufnr,
             winnr,
             files,
@@ -435,11 +441,13 @@ function M.open(base)
             local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(current_win)
             vim.cmd("noautocmd edit " .. vim.fn.fnameescape(first_file))
+            vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
             fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             require("mini.diff").enable(0)
+            set_main_tab_map(vim.api.nvim_get_current_buf())
         end)
     end)
 end
