@@ -118,7 +118,6 @@ function M.open(base)
         render_files(bufnr, winnr, files, current_file, git_root)
         setup_keymaps(bufnr, winnr, files, git_root, current_win, base)
 
-        -- Open first file and jump to first hunk
         local first_file = git_root .. "/" .. files[1]
         util_git.get_diff_hunks(base, files[1], function(hunks)
             local hunk_line = (hunks[1] and hunks[1].line) or 1

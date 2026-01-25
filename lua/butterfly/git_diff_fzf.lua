@@ -326,13 +326,13 @@ end
 
 ---@param opts? { file?: string, exclude_tests?: boolean, only_tests?: boolean, exclude_file?: string }
 function M.pick_vs_head(opts)
+    local resolved = resolve_current_file()
     opts = opts or {}
     M.pick({
         base = "HEAD",
-        file = opts.file,
         exclude_tests = opts.exclude_tests,
         only_tests = opts.only_tests,
-        exclude_file = opts.exclude_file,
+        exclude_file = resolved,
     })
 end
 
@@ -344,7 +344,10 @@ function M.pick_file_vs_head(file)
         return
     end
 
-    M.pick_vs_head({ file = resolved })
+    M.pick({
+        base = "HEAD",
+        file = resolved,
+    })
 end
 
 return M
