@@ -4,6 +4,20 @@ local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
+local function fold_on_diff_ready(buf_id)
+    local group = vim.api.nvim_create_augroup("ButterflyFoldOnce", { clear = true })
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "MiniDiffUpdated",
+        group = group,
+        once = true,
+        callback = function()
+            if vim.api.nvim_get_current_buf() == buf_id then
+                require("mini.diff.hunk").fold_between_hunks(buf_id)
+            end
+        end,
+    })
+end
+
 local function set_minidiff_base_ref(ref)
     vim.g.minidiff_git_base_ref = ref
     vim.notify("MiniDiff base: " .. ref)
@@ -206,6 +220,8 @@ local function setup_keymaps(
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+            local buf_id = vim.api.nvim_get_current_buf()
+            fold_on_diff_ready(buf_id)
         end)
         if vim.api.nvim_buf_is_valid(bufnr) then
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
@@ -341,6 +357,8 @@ function M.open(base)
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+            local buf_id = vim.api.nvim_get_current_buf()
+            fold_on_diff_ready(buf_id)
         end)
     end)
 end
