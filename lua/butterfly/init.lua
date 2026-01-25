@@ -14,6 +14,7 @@ M.setup = function()
         "ButterflyFileName",
         { fg = file_name_hl, bold = true }
     )
+    vim.api.nvim_set_hl(0, "ButterflyDir", { fg = "#9CCFD9" })
 end
 
 ---@class ScopeInfo

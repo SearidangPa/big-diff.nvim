@@ -63,11 +63,14 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
         table.insert(groups[group], { index = i, path = file })
     end
 
+    local highlights = {}
+
     for _, group in ipairs(group_order) do
         local group_display =
             truncate.truncate_middle(group, { no_truncate_max = width })
         table.insert(lines, group_display)
         line_to_file[#lines] = false
+        highlights[#lines] = "ButterflyDir"
 
         local group_entries = groups[group]
         for entry_index, entry in ipairs(group_entries) do
@@ -87,6 +90,7 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
                 )
             table.insert(lines, display)
             line_to_file[#lines] = entry.index
+            highlights[#lines] = "Comment"
 
             -- Check if this is the current file
             local abs_path = git_root .. "/" .. entry.path
@@ -99,6 +103,17 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
+
+    for line_nr, hl_group in ipairs(highlights) do
+        vim.api.nvim_buf_add_highlight(
+            bufnr,
+            highlight_ns,
+            hl_group,
+            line_nr - 1,
+            0,
+            -1
+        )
+    end
 
     -- Highlight current file (default to first file line)
     local highlight_line = current_line
