@@ -8,13 +8,27 @@ M.setup = function()
         require("butterfly.mini_diff").open(base)
     end, { nargs = "?" })
 
-    local file_name_hl = vim.o.background == "dark" and "#3E8FB0" or "#276983"
-    vim.api.nvim_set_hl(
-        0,
-        "ButterflyFileName",
-        { fg = file_name_hl, bold = true }
-    )
-    vim.api.nvim_set_hl(0, "ButterflyDir", { fg = "#9CCFD9" })
+    local function set_hl()
+        local file_name_hl = vim.o.background == "dark" and "#3E8FB0"
+            or "#276983"
+        vim.api.nvim_set_hl(
+            0,
+            "ButterflyFileName",
+            { fg = file_name_hl, bold = true }
+        )
+        vim.api.nvim_set_hl(0, "ButterflyDir", { fg = "#9CCFD9" })
+    end
+
+    set_hl()
+
+    vim.api.nvim_create_autocmd({ "ColorScheme", "OptionSet" }, {
+        callback = function(args)
+            if args.event == "OptionSet" and args.match ~= "background" then
+                return
+            end
+            set_hl()
+        end,
+    })
 end
 
 ---@class ScopeInfo

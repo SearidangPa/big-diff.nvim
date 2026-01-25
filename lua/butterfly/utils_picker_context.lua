@@ -15,18 +15,33 @@ local M = {}
 ---@type table<string, FileCache>
 local file_cache = {}
 
-M.DEFAULT_SCOPE_NODE_TYPES =
-    { "function_declaration", "function_definition", "method_declaration" }
+M.DEFAULT_SCOPE_NODE_TYPES = {
+    "function_declaration",
+    "function_definition",
+    "method_declaration",
+}
 
 M.scope_node_types_by_filetype = {
-    lua = { "function_declaration", "function_definition", "local_function" },
-    go = { "function_declaration", "method_declaration", "type_spec" },
+    lua = {
+        "function_declaration",
+        "function_definition",
+        "local_function",
+    },
+    go = {
+        "function_declaration",
+        "method_declaration",
+        "type_spec",
+    },
     fish = { "function_definition" },
     zig = { "function_declaration" },
 }
 
 M.ignored_context_node_types_by_filetype = {
-    go = { "import_declaration", "import_spec", "import_spec_list" },
+    go = {
+        "import_declaration",
+        "import_spec",
+        "import_spec_list",
+    },
 }
 
 M.comment_node_types = {
@@ -427,7 +442,11 @@ function M.get_file_cache(filepath)
     return get_or_create_file_cache(abs_path)
 end
 
-M.tree_icons = { vertical = "│ ", middle = "├╴", last = "└╴" }
+M.tree_icons = {
+    vertical = "│ ",
+    middle = "├╴",
+    last = "└╴",
+}
 
 ---@param abs_path string
 ---@return integer
@@ -468,7 +487,12 @@ function M.resolve_ft_and_lang(filepath)
 
     if not ft or ft == "" then
         local ext = filepath:match("%.([%w_]+)$")
-        local map = { lua = "lua", go = "go", zig = "zig", fish = "fish" }
+        local map = {
+            lua = "lua",
+            go = "go",
+            zig = "zig",
+            fish = "fish",
+        }
         ft = ext and map[ext] or nil
     end
 
@@ -601,7 +625,8 @@ function M.get_scope_at_line(filepath, line, opts)
         local check = node
         while check do
             if
-                is_ignored_context_node(check) or is_go_build_tag_comment(check)
+                is_ignored_context_node(check)
+                or is_go_build_tag_comment(check)
             then
                 ignored = true
                 break
@@ -849,8 +874,10 @@ function M.format_item(item, opts)
     if (not ft or ft == "") and bufnr ~= -1 then
         ft = vim.bo[bufnr].filetype
         if ft == "" then
-            local detected =
-                vim.filetype.match({ filename = abs_path, buf = bufnr })
+            local detected = vim.filetype.match({
+                filename = abs_path,
+                buf = bufnr,
+            })
             if detected then
                 ft = detected
                 vim.bo[bufnr].filetype = ft

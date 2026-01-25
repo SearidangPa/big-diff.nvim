@@ -137,7 +137,9 @@ local function format_item(item, opts)
     if item.jump_label then
         ret[#ret + 1] = {
             col = 0,
-            virt_text = { { item.jump_label, "SnacksPickerLabel" } },
+            virt_text = {
+                { item.jump_label, "SnacksPickerLabel" },
+            },
             virt_text_pos = "right_align",
             hl_mode = "combine",
         }
@@ -179,10 +181,11 @@ function M._build_jump_items(opts, list, cwd, cur_buf, exclude_current)
                         by_file[abs] = {}
                         table.insert(file_order, abs)
                     end
-                    table.insert(
-                        by_file[abs],
-                        { bufnr = bufnr, line = line, col = col }
-                    )
+                    table.insert(by_file[abs], {
+                        bufnr = bufnr,
+                        line = line,
+                        col = col,
+                    })
                 end
             end
         end
@@ -298,10 +301,9 @@ function M.pick(opts)
         title = "Jumplist (cwd)",
         items = items,
         format = function(item)
-            return format_item(
-                item,
-                { show_filename = not opts.current_buf_only }
-            )
+            return format_item(item, {
+                show_filename = not opts.current_buf_only,
+            })
         end,
         matcher = {
             keep_parents = true,
@@ -344,7 +346,11 @@ function M.pick(opts)
                 {
                     box = "vertical",
                     width = vim.o.columns,
-                    { win = "input", height = 1, border = "bottom" },
+                    {
+                        win = "input",
+                        height = 1,
+                        border = "bottom",
+                    },
                     { win = "list", border = "none" },
                 },
             },

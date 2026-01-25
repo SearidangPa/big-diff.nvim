@@ -78,7 +78,9 @@ local function format_item(item, opts)
     if item.jump_label then
         ret[#ret + 1] = {
             col = 0,
-            virt_text = { { item.jump_label, "SnacksPickerLabel" } },
+            virt_text = {
+                { item.jump_label, "SnacksPickerLabel" },
+            },
             virt_text_pos = "right_align",
             hl_mode = "combine",
         }
@@ -252,7 +254,11 @@ local function process_hunks_and_show_picker(opts, base, hunks)
                 {
                     box = "vertical",
                     width = vim.o.columns,
-                    { win = "input", height = 1, border = "bottom" },
+                    {
+                        win = "input",
+                        height = 1,
+                        border = "bottom",
+                    },
                     { win = "list", border = "none" },
                 },
             },
@@ -305,12 +311,18 @@ end
 
 function M.pick_tests_vs_default_branch()
     local resolved = resolve_current_file()
-    M.pick_vs_default_branch({ only_tests = true, exclude_file = resolved })
+    M.pick_vs_default_branch({
+        only_tests = true,
+        exclude_file = resolved,
+    })
 end
 
 function M.pick_context_vs_default_branch()
     local resolved = resolve_current_file()
-    M.pick_vs_default_branch({ exclude_tests = true, exclude_file = resolved })
+    M.pick_vs_default_branch({
+        exclude_tests = true,
+        exclude_file = resolved,
+    })
 end
 
 ---@param file? string

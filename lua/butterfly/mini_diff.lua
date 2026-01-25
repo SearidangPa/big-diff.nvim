@@ -3,6 +3,7 @@ local truncate = require("butterfly.util_truncate")
 local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
+local current_line_ns = vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
 
 -- Fold non-hunk regions. hunks = { { line = N, count = M }, ... }
 local function fold_between_hunks_from_git(hunks, context)
@@ -58,7 +59,6 @@ end
 
 local function set_minidiff_base_ref(ref)
     vim.g.minidiff_git_base_ref = ref
-    vim.notify("MiniDiff base: " .. ref)
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
 end
 
@@ -170,40 +170,54 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
 
-    for line_nr, hl_group in ipairs(highlights) do
-        vim.api.nvim_buf_add_highlight(
-            bufnr,
-            highlight_ns,
-            hl_group,
-            line_nr - 1,
-            0,
-            -1
-        )
-    end
-
-    -- Highlight current file (default to first file line)
-    local highlight_line = current_line
-    if not highlight_line then
-        for line_nr, file_index in ipairs(line_to_file) do
-            if file_index then
-                highlight_line = line_nr
-                break
-            end
+    local function apply_line_highlights()
+        vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
+        for line_nr, hl_group in ipairs(highlights) do
+            vim.api.nvim_buf_add_highlight(
+                bufnr,
+                highlight_ns,
+                hl_group,
+                line_nr - 1,
+                0,
+                -1
+            )
         end
     end
-    if highlight_line then
-        vim.api.nvim_buf_set_extmark(
-            bufnr,
-            highlight_ns,
-            highlight_line - 1,
-            0,
-            {
-                line_hl_group = "ButterflyFileName",
-            }
-        )
+
+    apply_line_highlights()
+
+    local function highlight_current_file(line_override)
+        local highlight_line = line_override or current_line
+        if not highlight_line then
+            for line_nr, file_index in ipairs(line_to_file) do
+                if file_index then
+                    highlight_line = line_nr
+                    break
+                end
+            end
+        end
+        if highlight_line then
+            current_line = highlight_line
+            vim.api.nvim_buf_clear_namespace(bufnr, current_line_ns, 0, -1)
+            vim.api.nvim_buf_set_extmark(
+                bufnr,
+                current_line_ns,
+                highlight_line - 1,
+                0,
+                {
+                    line_hl_group = "ButterflyFileName",
+                }
+            )
+        end
     end
 
-    return line_to_file
+    vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            highlight_current_file()
+        end
+    end)
+
+    return line_to_file, apply_line_highlights, highlight_current_file
 end
 
 local function setup_keymaps(
@@ -213,7 +227,9 @@ local function setup_keymaps(
     git_root,
     main_win,
     base,
-    line_to_file
+    line_to_file,
+    apply_line_highlights,
+    highlight_current_file
 )
     local open_next_file
     local open_previous_file
@@ -274,18 +290,10 @@ local function setup_keymaps(
             set_main_tab_map(vim.api.nvim_get_current_buf())
         end)
         if vim.api.nvim_buf_is_valid(bufnr) then
-            vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
+            apply_line_highlights()
             local highlight_line = file_index_to_line(file_index)
             if highlight_line then
-                vim.api.nvim_buf_set_extmark(
-                    bufnr,
-                    highlight_ns,
-                    highlight_line - 1,
-                    0,
-                    {
-                        line_hl_group = "ButterflyFileName",
-                    }
-                )
+                highlight_current_file(highlight_line)
             end
         end
     end
