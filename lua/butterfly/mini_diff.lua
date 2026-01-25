@@ -48,18 +48,56 @@ end
 local function render_files(bufnr, winnr, files, current_file, git_root)
     local width = vim.api.nvim_win_get_width(winnr) - 2
     local lines = {}
+    local line_to_file = {}
     local current_line = nil
+    local groups = {}
+    local group_order = {}
 
     for i, file in ipairs(files) do
-        local basename = vim.fn.fnamemodify(file, ":t:r")
-        local display =
-            truncate.truncate_middle(basename, { no_truncate_max = width })
-        table.insert(lines, display)
+        local parent = vim.fn.fnamemodify(file, ":h")
+        local group = parent == "." and "." or vim.fn.fnamemodify(parent, ":t")
+        if not groups[group] then
+            groups[group] = {}
+            table.insert(group_order, group)
+        end
+        table.insert(groups[group], { index = i, path = file })
+    end
 
-        -- Check if this is the current file
-        local abs_path = git_root .. "/" .. file
-        if abs_path == current_file then
-            current_line = i
+    for _, group in ipairs(group_order) do
+        local group_display =
+            truncate.truncate_middle(group, { no_truncate_max = width })
+        table.insert(lines, group_display)
+        line_to_file[#lines] = false
+
+        local group_entries = groups[group]
+        for entry_index, entry in ipairs(group_entries) do
+            local basename = vim.fn.fnamemodify(entry.path, ":t:r")
+            -- local prefix = "|- "
+
+            -- M.tree_icons = { vertical = "│ ", middle = "├╴", last = "└╴" }
+            local prefix
+            if entry_index == #group_entries then
+                prefix = "└╴ "
+            else
+                prefix = "├╴ "
+            end
+
+            -- local prefix = "├╴ "
+
+            local max_width = math.max(0, width - #prefix)
+            local display = prefix
+                .. truncate.truncate_middle(
+                    basename,
+                    { no_truncate_max = max_width }
+                )
+            table.insert(lines, display)
+            line_to_file[#lines] = entry.index
+
+            -- Check if this is the current file
+            local abs_path = git_root .. "/" .. entry.path
+            if abs_path == current_file then
+                current_line = #lines
+            end
         end
     end
 
@@ -67,18 +105,45 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     vim.bo[bufnr].modifiable = false
 
-    -- Highlight current file (default to first file)
-    local highlight_line = current_line or 1
-    vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, highlight_line - 1, 0, {
-        line_hl_group = "ButterflyFileName",
-    })
+    -- Highlight current file (default to first file line)
+    local highlight_line = current_line
+    if not highlight_line then
+        for line_nr, file_index in ipairs(line_to_file) do
+            if file_index then
+                highlight_line = line_nr
+                break
+            end
+        end
+    end
+    if highlight_line then
+        vim.api.nvim_buf_set_extmark(
+            bufnr,
+            highlight_ns,
+            highlight_line - 1,
+            0,
+            {
+                line_hl_group = "ButterflyFileName",
+            }
+        )
+    end
+
+    return line_to_file
 end
 
-local function setup_keymaps(bufnr, winnr, files, git_root, main_win, base)
+local function setup_keymaps(
+    bufnr,
+    winnr,
+    files,
+    git_root,
+    main_win,
+    base,
+    line_to_file
+)
     -- Open file on Enter
     vim.keymap.set("n", "<CR>", function()
         local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-        local file = files[line_nr]
+        local file_index = line_to_file[line_nr]
+        local file = file_index and files[file_index]
         if file then
             util_git.get_diff_hunks(base, file, function(hunks)
                 local hunk_line = (hunks[1] and hunks[1].line) or 1
@@ -115,8 +180,17 @@ function M.open(base)
 
         local current_win = vim.api.nvim_get_current_win()
         local bufnr, winnr = create_split_buffer()
-        render_files(bufnr, winnr, files, current_file, git_root)
-        setup_keymaps(bufnr, winnr, files, git_root, current_win, base)
+        local line_to_file =
+            render_files(bufnr, winnr, files, current_file, git_root)
+        setup_keymaps(
+            bufnr,
+            winnr,
+            files,
+            git_root,
+            current_win,
+            base,
+            line_to_file
+        )
 
         local first_file = git_root .. "/" .. files[1]
         util_git.get_diff_hunks(base, files[1], function(hunks)
