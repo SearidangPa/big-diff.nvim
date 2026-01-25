@@ -5,7 +5,8 @@ local util_git = require("butterfly.util_git")
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
 local function fold_on_diff_ready(buf_id)
-    local group = vim.api.nvim_create_augroup("ButterflyFoldOnce", { clear = true })
+    local group =
+        vim.api.nvim_create_augroup("ButterflyFoldOnce", { clear = true })
     vim.api.nvim_create_autocmd("User", {
         pattern = "MiniDiffUpdated",
         group = group,
@@ -272,6 +273,30 @@ local function setup_keymaps(
         if next_line then
             vim.api.nvim_win_set_cursor(0, { next_line, 0 })
             open_file_at(next_line)
+        end
+    end, { buffer = bufnr, nowait = true })
+
+    -- Previous file on Shift-Tab
+    vim.keymap.set("n", "<S-Tab>", function()
+        local start_line = vim.api.nvim_win_get_cursor(0)[1]
+        local prev_line = nil
+        for i = start_line - 1, 1, -1 do
+            if line_to_file[i] then
+                prev_line = i
+                break
+            end
+        end
+        if not prev_line then
+            for i = #line_to_file, start_line, -1 do
+                if line_to_file[i] then
+                    prev_line = i
+                    break
+                end
+            end
+        end
+        if prev_line then
+            vim.api.nvim_win_set_cursor(0, { prev_line, 0 })
+            open_file_at(prev_line)
         end
     end, { buffer = bufnr, nowait = true })
 
