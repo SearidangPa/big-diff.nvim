@@ -4,6 +4,30 @@ local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
+local function set_minidiff_base_ref(ref)
+    local MiniDiff = require("mini.diff")
+    vim.g.minidiff_git_base_ref = ref
+    vim.notify("MiniDiff base: " .. ref)
+    vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
+    vim.cmd("redrawstatus")
+
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "MiniDiffUpdated",
+        once = true,
+        callback = function()
+            MiniDiff.open_float()
+        end,
+    })
+end
+
+local function ensure_minidiff_overlay_enabled()
+    local MiniDiff = require("mini.diff")
+    local state = require("mini.diff.state")
+    if not state.overlay then
+        MiniDiff.toggle_overlay()
+    end
+end
+
 local function get_diff_files(base, callback)
     local git_root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
     vim.system(
@@ -283,7 +307,13 @@ local function setup_keymaps(
 end
 
 function M.open(base)
+    local base_arg = base
     base = base or "HEAD"
+
+    if base_arg ~= nil then
+        set_minidiff_base_ref(base)
+        ensure_minidiff_overlay_enabled()
+    end
 
     local current_file = vim.fn.expand("%:p")
 
