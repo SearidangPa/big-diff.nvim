@@ -5,19 +5,9 @@ local util_git = require("butterfly.util_git")
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
 local function set_minidiff_base_ref(ref)
-    local MiniDiff = require("mini.diff")
     vim.g.minidiff_git_base_ref = ref
     vim.notify("MiniDiff base: " .. ref)
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
-    vim.cmd("redrawstatus")
-
-    vim.api.nvim_create_autocmd("User", {
-        pattern = "MiniDiffUpdated",
-        once = true,
-        callback = function()
-            MiniDiff.open_float()
-        end,
-    })
 end
 
 local function ensure_minidiff_overlay_enabled()
@@ -221,9 +211,15 @@ local function setup_keymaps(
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
             local highlight_line = file_index_to_line(file_index)
             if highlight_line then
-                vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, highlight_line - 1, 0, {
-                    line_hl_group = "ButterflyFileName",
-                })
+                vim.api.nvim_buf_set_extmark(
+                    bufnr,
+                    highlight_ns,
+                    highlight_line - 1,
+                    0,
+                    {
+                        line_hl_group = "ButterflyFileName",
+                    }
+                )
             end
         end
     end
