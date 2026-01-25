@@ -4,19 +4,56 @@ local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 
-local function fold_on_diff_ready(buf_id)
-    local group =
-        vim.api.nvim_create_augroup("ButterflyFoldOnce", { clear = true })
-    vim.api.nvim_create_autocmd("User", {
-        pattern = "MiniDiffUpdated",
-        group = group,
-        once = true,
-        callback = function()
-            if vim.api.nvim_get_current_buf() == buf_id then
-                require("mini.diff.hunk").fold_between_hunks(buf_id)
-            end
-        end,
-    })
+-- Fold non-hunk regions. hunks = { { line = N, count = M }, ... }
+local function fold_between_hunks_from_git(hunks, context)
+    context = context or 2
+    if #hunks == 0 then
+        return
+    end
+
+    -- Sort hunks and merge contiguous/overlapping ones into ranges
+    table.sort(hunks, function(a, b)
+        return a.line < b.line
+    end)
+    local ranges = {}
+    for _, h in ipairs(hunks) do
+        local h_from = h.line
+        local h_to = h.line + math.max(h.count - 1, 0)
+        if #ranges == 0 or h_from > ranges[#ranges].to + 1 then
+            table.insert(ranges, { from = h_from, to = h_to })
+        else
+            ranges[#ranges].to = math.max(ranges[#ranges].to, h_to)
+        end
+    end
+
+    local line_count = vim.api.nvim_buf_line_count(0)
+    local folds = {}
+
+    -- Fold from start to first hunk (minus context)
+    local first_fold_end = ranges[1].from - context - 1
+    if first_fold_end >= 1 then
+        table.insert(folds, { 1, first_fold_end })
+    end
+
+    -- Fold between consecutive hunks
+    for i = 1, #ranges - 1 do
+        local fold_start = ranges[i].to + context + 1
+        local fold_end = ranges[i + 1].from - context - 1
+        if fold_start <= fold_end then
+            table.insert(folds, { fold_start, fold_end })
+        end
+    end
+
+    -- Fold from last hunk (plus context) to end
+    local last_fold_start = ranges[#ranges].to + context + 1
+    if last_fold_start <= line_count then
+        table.insert(folds, { last_fold_start, line_count })
+    end
+
+    -- Create folds
+    for _, fold in ipairs(folds) do
+        vim.cmd(string.format("%d,%dfold", fold[1], fold[2]))
+    end
 end
 
 local function set_minidiff_base_ref(ref)
@@ -179,6 +216,7 @@ local function setup_keymaps(
     line_to_file
 )
     local open_next_file
+    local open_previous_file
 
     local function set_main_tab_map(target_bufnr)
         if not (target_bufnr and vim.api.nvim_buf_is_valid(target_bufnr)) then
@@ -187,6 +225,11 @@ local function setup_keymaps(
         vim.keymap.set("n", "<Tab>", function()
             if open_next_file then
                 open_next_file()
+            end
+        end, { buffer = target_bufnr, nowait = true })
+        vim.keymap.set("n", "<S-Tab>", function()
+            if open_previous_file then
+                open_previous_file()
             end
         end, { buffer = target_bufnr, nowait = true })
     end
@@ -217,12 +260,12 @@ local function setup_keymaps(
         util_git.get_diff_hunks(base, file, function(hunks)
             local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(main_win)
-            vim.cmd("edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+            vim.cmd("noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
+            fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-            local buf_id = vim.api.nvim_get_current_buf()
-            fold_on_diff_ready(buf_id)
+            require("mini.diff").enable(0)
         end)
         if vim.api.nvim_buf_is_valid(bufnr) then
             vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
@@ -335,6 +378,19 @@ local function setup_keymaps(
         end
     end
 
+    open_previous_file = function()
+        local current_index = find_current_file_index()
+        local prev_index = current_index and current_index - 1 or #files
+        if prev_index < 1 then
+            prev_index = #files
+        end
+        open_file_by_index(prev_index)
+        local line_nr = file_index_to_line(prev_index)
+        if line_nr and vim.api.nvim_win_is_valid(winnr) then
+            vim.api.nvim_win_set_cursor(winnr, { line_nr, 0 })
+        end
+    end
+
     -- Close on q
     vim.keymap.set("n", "q", function()
         vim.api.nvim_win_close(winnr, true)
@@ -378,12 +434,12 @@ function M.open(base)
         util_git.get_diff_hunks(base, files[1], function(hunks)
             local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(current_win)
-            vim.cmd("edit " .. vim.fn.fnameescape(first_file))
+            vim.cmd("noautocmd edit " .. vim.fn.fnameescape(first_file))
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
+            fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-            local buf_id = vim.api.nvim_get_current_buf()
-            fold_on_diff_ready(buf_id)
+            require("mini.diff").enable(0)
         end)
     end)
 end
