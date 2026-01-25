@@ -149,32 +149,137 @@ local function setup_keymaps(
     base,
     line_to_file
 )
+    local open_next_file
+
+    local function set_main_tab_map(target_bufnr)
+        if not (target_bufnr and vim.api.nvim_buf_is_valid(target_bufnr)) then
+            return
+        end
+        vim.keymap.set("n", "<Tab>", function()
+            if open_next_file then
+                open_next_file()
+            end
+        end, { buffer = target_bufnr, nowait = true })
+    end
+
+    local function attach_main_tab_map()
+        if not vim.api.nvim_win_is_valid(main_win) then
+            return
+        end
+        set_main_tab_map(vim.api.nvim_win_get_buf(main_win))
+    end
+
+    local function file_index_to_line(file_index)
+        for line_nr, index in ipairs(line_to_file) do
+            if index == file_index then
+                return line_nr
+            end
+        end
+    end
+
+    local function open_file_by_index(file_index)
+        local file = file_index and files[file_index]
+        if not file then
+            return
+        end
+        if not vim.api.nvim_win_is_valid(main_win) then
+            return
+        end
+        util_git.get_diff_hunks(base, file, function(hunks)
+            local hunk_line = (hunks[1] and hunks[1].line) or 1
+            vim.api.nvim_set_current_win(main_win)
+            vim.cmd("edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+            local line_count = vim.api.nvim_buf_line_count(0)
+            local target_line = math.max(1, math.min(hunk_line, line_count))
+            vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+        end)
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
+            local highlight_line = file_index_to_line(file_index)
+            if highlight_line then
+                vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, highlight_line - 1, 0, {
+                    line_hl_group = "ButterflyFileName",
+                })
+            end
+        end
+    end
+
+    local function open_file_at(line_nr)
+        local file_index = line_to_file[line_nr]
+        open_file_by_index(file_index)
+    end
+
     -- Open file on Enter
     vim.keymap.set("n", "<CR>", function()
         local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-        local file_index = line_to_file[line_nr]
-        local file = file_index and files[file_index]
-        if file then
-            util_git.get_diff_hunks(base, file, function(hunks)
-                local hunk_line = (hunks[1] and hunks[1].line) or 1
-                vim.api.nvim_set_current_win(main_win)
-                vim.cmd("edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
-                local line_count = vim.api.nvim_buf_line_count(0)
-                local target_line = math.max(1, math.min(hunk_line, line_count))
-                vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-            end)
-            -- highlight the selected line
-            vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
-            vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, line_nr - 1, 0, {
-                line_hl_group = "ButterflyFileName",
-            })
+        open_file_at(line_nr)
+    end, { buffer = bufnr, nowait = true })
+
+    -- Next file on Tab
+    vim.keymap.set("n", "<Tab>", function()
+        local start_line = vim.api.nvim_win_get_cursor(0)[1]
+        local next_line = nil
+        for i = start_line + 1, #line_to_file do
+            if line_to_file[i] then
+                next_line = i
+                break
+            end
+        end
+        if not next_line then
+            for i = 1, start_line do
+                if line_to_file[i] then
+                    next_line = i
+                    break
+                end
+            end
+        end
+        if next_line then
+            vim.api.nvim_win_set_cursor(0, { next_line, 0 })
+            open_file_at(next_line)
         end
     end, { buffer = bufnr, nowait = true })
+
+    if vim.api.nvim_win_is_valid(main_win) then
+        attach_main_tab_map()
+        vim.api.nvim_create_autocmd("BufEnter", {
+            callback = function()
+                attach_main_tab_map()
+            end,
+        })
+    end
+
+    local function find_current_file_index()
+        local current_bufnr = vim.api.nvim_win_get_buf(main_win)
+        local current_path = vim.api.nvim_buf_get_name(current_bufnr)
+        if current_path == "" then
+            return nil
+        end
+        for i, file in ipairs(files) do
+            if current_path == git_root .. "/" .. file then
+                return i
+            end
+        end
+    end
+
+    open_next_file = function()
+        local current_index = find_current_file_index()
+        local next_index = current_index and current_index + 1 or 1
+        if next_index > #files then
+            next_index = 1
+        end
+        open_file_by_index(next_index)
+        local line_nr = file_index_to_line(next_index)
+        if line_nr and vim.api.nvim_win_is_valid(winnr) then
+            vim.api.nvim_win_set_cursor(winnr, { line_nr, 0 })
+        end
+    end
 
     -- Close on q
     vim.keymap.set("n", "q", function()
         vim.api.nvim_win_close(winnr, true)
     end, { buffer = bufnr, nowait = true })
+
+    return open_next_file
 end
 
 function M.open(base)
