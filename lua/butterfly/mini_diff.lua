@@ -72,17 +72,12 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
         local group_entries = groups[group]
         for entry_index, entry in ipairs(group_entries) do
             local basename = vim.fn.fnamemodify(entry.path, ":t:r")
-            -- local prefix = "|- "
-
-            -- M.tree_icons = { vertical = "│ ", middle = "├╴", last = "└╴" }
             local prefix
             if entry_index == #group_entries then
                 prefix = "└╴ "
             else
                 prefix = "├╴ "
             end
-
-            -- local prefix = "├╴ "
 
             local max_width = math.max(0, width - #prefix)
             local display = prefix
