@@ -1,99 +1,10 @@
 local M = {}
 local truncate = require("butterfly.util_truncate")
-local util_git = require("butterfly.util_git")
-
-local state = {
-    open_next_file = nil,
-    open_previous_file = nil,
-}
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
-local current_line_ns =
-    vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
+local current_line_ns = vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
 
--- Fold non-hunk regions. hunks = { { line = N, count = M }, ... }
-local function fold_between_hunks_from_git(hunks, context)
-    context = context or 2
-    if #hunks == 0 then
-        return
-    end
-
-    -- Sort hunks and merge contiguous/overlapping ones into ranges
-    table.sort(hunks, function(a, b)
-        return a.line < b.line
-    end)
-    local ranges = {}
-    for _, h in ipairs(hunks) do
-        local h_from = h.line
-        local h_to = h.line + math.max(h.count - 1, 0)
-        if #ranges == 0 or h_from > ranges[#ranges].to + 1 then
-            table.insert(ranges, { from = h_from, to = h_to })
-        else
-            ranges[#ranges].to = math.max(ranges[#ranges].to, h_to)
-        end
-    end
-
-    local line_count = vim.api.nvim_buf_line_count(0)
-    local folds = {}
-
-    -- Fold from start to first hunk (minus context)
-    local first_fold_end = ranges[1].from - context - 1
-    if first_fold_end >= 1 then
-        table.insert(folds, { 1, first_fold_end })
-    end
-
-    -- Fold between consecutive hunks
-    for i = 1, #ranges - 1 do
-        local fold_start = ranges[i].to + context + 1
-        local fold_end = ranges[i + 1].from - context - 1
-        if fold_start <= fold_end then
-            table.insert(folds, { fold_start, fold_end })
-        end
-    end
-
-    -- Fold from last hunk (plus context) to end
-    local last_fold_start = ranges[#ranges].to + context + 1
-    if last_fold_start <= line_count then
-        table.insert(folds, { last_fold_start, line_count })
-    end
-
-    -- Create folds
-    for _, fold in ipairs(folds) do
-        vim.cmd(string.format("%d,%dfold", fold[1], fold[2]))
-    end
-end
-
-local function set_minidiff_base_ref(ref)
-    vim.g.minidiff_git_base_ref = ref
-    vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
-end
-
-local function ensure_minidiff_overlay_enabled()
-    local MiniDiff = require("mini.diff")
-    local state = require("mini.diff.state")
-    if not state.overlay then
-        MiniDiff.toggle_overlay()
-    end
-end
-
-local function get_diff_files(base, callback)
-    local git_root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
-    vim.system(
-        { "git", "diff", "--name-only", base },
-        { text = true, cwd = git_root },
-        function(obj)
-            local files = {}
-            for line in (obj.stdout or ""):gmatch("[^\n]+") do
-                table.insert(files, line)
-            end
-            vim.schedule(function()
-                callback(files, git_root)
-            end)
-        end
-    )
-end
-
-local function create_split_buffer()
+function M.create_split_buffer()
     vim.cmd("topleft vnew")
     local bufnr = vim.api.nvim_get_current_buf()
     local winnr = vim.api.nvim_get_current_win()
@@ -117,31 +28,31 @@ local function create_split_buffer()
     return bufnr, winnr
 end
 
-local function render_files(bufnr, winnr, files, git_root)
+function M.render_files(bufnr, winnr, files, git_root)
     local width = vim.api.nvim_win_get_width(winnr) - 2
     local lines = {}
-    local line_to_file = {}
+    local line_to_file_index = {}
     local current_line = nil
     local groups = {}
-    local group_order = {}
+    local group_names = {}
 
     for i, file in ipairs(files) do
         local parent = vim.fn.fnamemodify(file, ":h")
         local group = parent == "." and "." or vim.fn.fnamemodify(parent, ":t")
         if not groups[group] then
             groups[group] = {}
-            table.insert(group_order, group)
+            table.insert(group_names, group)
         end
         table.insert(groups[group], { index = i, path = file })
     end
 
     local highlights = {}
 
-    for _, group in ipairs(group_order) do
+    for _, group in ipairs(group_names) do
         local group_display =
             truncate.truncate_middle(group, { no_truncate_max = width })
         table.insert(lines, group_display)
-        line_to_file[#lines] = false
+        line_to_file_index[#lines] = false
         highlights[#lines] = "ButterflyDir"
 
         local group_entries = groups[group]
@@ -161,7 +72,7 @@ local function render_files(bufnr, winnr, files, git_root)
                     { no_truncate_max = max_width }
                 )
             table.insert(lines, display)
-            line_to_file[#lines] = entry.index
+            line_to_file_index[#lines] = entry.index
             highlights[#lines] = "Comment"
 
             -- Check if this is the current file
@@ -169,9 +80,7 @@ local function render_files(bufnr, winnr, files, git_root)
             local current_file =
                 vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
             local normalized_current = vim.fs.normalize(current_file)
-            if
-                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
-            then
+            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
                 current_line = #lines
             end
         end
@@ -200,7 +109,7 @@ local function render_files(bufnr, winnr, files, git_root)
     local function highlight_current_file(line_override)
         local highlight_line = line_override or current_line
         if not highlight_line then
-            for line_nr, file_index in ipairs(line_to_file) do
+            for line_nr, file_index in ipairs(line_to_file_index) do
                 if file_index then
                     highlight_line = line_nr
                     break
@@ -224,25 +133,26 @@ local function render_files(bufnr, winnr, files, git_root)
 
     highlight_current_file()
 
-    return line_to_file, apply_line_highlights, highlight_current_file
+    return line_to_file_index, apply_line_highlights, highlight_current_file
 end
 
-local function setup_keymaps(
+function M.setup_keymaps(
     bufnr,
     winnr,
     files,
     git_root,
     main_win,
     base,
-    line_to_file,
+    line_to_file_index,
     apply_line_highlights,
-    highlight_current_file
+    highlight_current_file,
+    open_file_in_main_win
 )
     local open_next_file
     local open_previous_file
 
     local function file_index_to_line(file_index)
-        for line_nr, index in ipairs(line_to_file) do
+        for line_nr, index in ipairs(line_to_file_index) do
             if index == file_index then
                 return line_nr
             end
@@ -257,21 +167,9 @@ local function setup_keymaps(
         if not vim.api.nvim_win_is_valid(main_win) then
             return
         end
-        util_git.get_diff_hunks(base, file, function(hunks)
-            local hunk_line = (hunks[1] and hunks[1].line) or 1
-            vim.api.nvim_set_current_win(main_win)
-            vim.cmd(
-                "noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file)
-            )
 
-            vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
+        open_file_in_main_win(base, git_root, file, main_win)
 
-            local line_count = vim.api.nvim_buf_line_count(0)
-            local target_line = math.max(1, math.min(hunk_line, line_count))
-            fold_between_hunks_from_git(hunks)
-            vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-            require("mini.diff").enable(0)
-        end)
         if vim.api.nvim_buf_is_valid(bufnr) then
             apply_line_highlights()
             local highlight_line = file_index_to_line(file_index)
@@ -281,15 +179,11 @@ local function setup_keymaps(
         end
     end
 
-    local function open_file_at(line_nr)
-        local file_index = line_to_file[line_nr]
-        open_file_by_index(file_index)
-    end
-
     -- Open file on Enter
     vim.keymap.set("n", "<CR>", function()
         local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-        open_file_at(line_nr)
+        local file_index = line_to_file_index[line_nr]
+        open_file_by_index(file_index)
     end, { buffer = bufnr, nowait = true })
 
     local function find_current_file_index()
@@ -331,66 +225,10 @@ local function setup_keymaps(
         end
     end
 
-    state.open_next_file = open_next_file
-    state.open_previous_file = open_previous_file
-end
-
-function M.open(base)
-    local base_arg = base
-    base = base or "HEAD"
-
-    if base_arg ~= nil then
-        set_minidiff_base_ref(base)
-        ensure_minidiff_overlay_enabled()
-    end
-
-    get_diff_files(base, function(files, git_root)
-        if #files == 0 then
-            vim.notify("No changes in diff", vim.log.levels.INFO)
-            return
-        end
-
-        local current_win = vim.api.nvim_get_current_win()
-        local bufnr, winnr = create_split_buffer()
-        local line_to_file, apply_line_highlights, highlight_current_file =
-            render_files(bufnr, winnr, files, git_root)
-        setup_keymaps(
-            bufnr,
-            winnr,
-            files,
-            git_root,
-            current_win,
-            base,
-            line_to_file,
-            apply_line_highlights,
-            highlight_current_file
-        )
-
-        local first_file = git_root .. "/" .. files[1]
-        util_git.get_diff_hunks(base, files[1], function(hunks)
-            local hunk_line = (hunks[1] and hunks[1].line) or 1
-            vim.api.nvim_set_current_win(current_win)
-            vim.cmd("noautocmd edit " .. vim.fn.fnameescape(first_file))
-            vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
-            local line_count = vim.api.nvim_buf_line_count(0)
-            local target_line = math.max(1, math.min(hunk_line, line_count))
-            fold_between_hunks_from_git(hunks)
-            vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-            require("mini.diff").enable(0)
-        end)
-    end)
-end
-
-function M.next_file()
-    if state.open_next_file then
-        state.open_next_file()
-    end
-end
-
-function M.previous_file()
-    if state.open_previous_file then
-        state.open_previous_file()
-    end
+    return {
+        open_next_file = open_next_file,
+        open_previous_file = open_previous_file,
+    }
 end
 
 return M
