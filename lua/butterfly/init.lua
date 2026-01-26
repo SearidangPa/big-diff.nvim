@@ -4,8 +4,14 @@ M.setup = function()
     require("butterfly.jumplist_fzf")
     require("butterfly.git_diff_fzf")
     vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
-        local base = opts.args ~= "" and opts.args or nil
-        require("butterfly.mini_diff").open(base)
+        if opts.args ~= "" then
+            require("butterfly.mini_diff").open(opts.args)
+            return
+        end
+
+        require("butterfly.util_git").get_default_base_branch_async(function(branch)
+            require("butterfly.mini_diff").open(branch)
+        end)
     end, { nargs = "?" })
 
     local function set_hl()

@@ -63,6 +63,16 @@ function M.get_default_base_branch_async(callback, opts)
 
     cached.inflight = { callback }
 
+    local function run_callbacks(branch)
+        local callbacks = cached.inflight or {}
+        cached.inflight = nil
+        for _, cb in ipairs(callbacks) do
+            vim.schedule(function()
+                cb(branch)
+            end)
+        end
+    end
+
     vim.system({
         "git",
         "-C",
@@ -71,11 +81,7 @@ function M.get_default_base_branch_async(callback, opts)
         "refs/remotes/origin/HEAD",
     }, { text = true }, function(obj)
         if obj.code ~= 0 then
-            local callbacks = cached.inflight or {}
-            cached.inflight = nil
-            for _, cb in ipairs(callbacks) do
-                cb(fallback)
-            end
+            run_callbacks(fallback)
             return
         end
 
@@ -87,11 +93,7 @@ function M.get_default_base_branch_async(callback, opts)
 
         cached.branch = branch
 
-        local callbacks = cached.inflight or {}
-        cached.inflight = nil
-        for _, cb in ipairs(callbacks) do
-            cb(branch)
-        end
+        run_callbacks(branch)
     end)
 end
 
