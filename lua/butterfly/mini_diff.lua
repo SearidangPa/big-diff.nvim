@@ -2,6 +2,11 @@ local M = {}
 local truncate = require("butterfly.util_truncate")
 local util_git = require("butterfly.util_git")
 
+local state = {
+    open_next_file = nil,
+    open_previous_file = nil,
+}
+
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 local current_line_ns =
     vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
@@ -236,29 +241,6 @@ local function setup_keymaps(
     local open_next_file
     local open_previous_file
 
-    local function set_main_tab_map(target_bufnr)
-        if not (target_bufnr and vim.api.nvim_buf_is_valid(target_bufnr)) then
-            return
-        end
-        vim.keymap.set("n", "<Tab>", function()
-            if open_next_file then
-                open_next_file()
-            end
-        end, { buffer = target_bufnr, nowait = true })
-        vim.keymap.set("n", "<S-Tab>", function()
-            if open_previous_file then
-                open_previous_file()
-            end
-        end, { buffer = target_bufnr, nowait = true })
-    end
-
-    local function attach_main_tab_map()
-        if not vim.api.nvim_win_is_valid(main_win) then
-            return
-        end
-        set_main_tab_map(vim.api.nvim_win_get_buf(main_win))
-    end
-
     local function file_index_to_line(file_index)
         for line_nr, index in ipairs(line_to_file) do
             if index == file_index then
@@ -289,7 +271,6 @@ local function setup_keymaps(
             fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             require("mini.diff").enable(0)
-            set_main_tab_map(vim.api.nvim_get_current_buf())
         end)
         if vim.api.nvim_buf_is_valid(bufnr) then
             apply_line_highlights()
@@ -310,15 +291,6 @@ local function setup_keymaps(
         local line_nr = vim.api.nvim_win_get_cursor(0)[1]
         open_file_at(line_nr)
     end, { buffer = bufnr, nowait = true })
-
-    if vim.api.nvim_win_is_valid(main_win) then
-        attach_main_tab_map()
-        vim.api.nvim_create_autocmd("BufEnter", {
-            callback = function()
-                attach_main_tab_map()
-            end,
-        })
-    end
 
     local function find_current_file_index()
         local current_bufnr = vim.api.nvim_win_get_buf(main_win)
@@ -359,7 +331,8 @@ local function setup_keymaps(
         end
     end
 
-    return open_next_file, set_main_tab_map
+    state.open_next_file = open_next_file
+    state.open_previous_file = open_previous_file
 end
 
 function M.open(base)
@@ -381,7 +354,7 @@ function M.open(base)
         local bufnr, winnr = create_split_buffer()
         local line_to_file, apply_line_highlights, highlight_current_file =
             render_files(bufnr, winnr, files, git_root)
-        local _, set_main_tab_map = setup_keymaps(
+        setup_keymaps(
             bufnr,
             winnr,
             files,
@@ -404,9 +377,20 @@ function M.open(base)
             fold_between_hunks_from_git(hunks)
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             require("mini.diff").enable(0)
-            set_main_tab_map(vim.api.nvim_get_current_buf())
         end)
     end)
+end
+
+function M.next_file()
+    if state.open_next_file then
+        state.open_next_file()
+    end
+end
+
+function M.previous_file()
+    if state.open_previous_file then
+        state.open_previous_file()
+    end
 end
 
 return M
