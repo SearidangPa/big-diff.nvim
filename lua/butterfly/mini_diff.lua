@@ -3,7 +3,8 @@ local truncate = require("butterfly.util_truncate")
 local util_git = require("butterfly.util_git")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
-local current_line_ns = vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
+local current_line_ns =
+    vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
 
 -- Fold non-hunk regions. hunks = { { line = N, count = M }, ... }
 local function fold_between_hunks_from_git(hunks, context)
@@ -111,7 +112,7 @@ local function create_split_buffer()
     return bufnr, winnr
 end
 
-local function render_files(bufnr, winnr, files, current_file, git_root)
+local function render_files(bufnr, winnr, files, git_root)
     local width = vim.api.nvim_win_get_width(winnr) - 2
     local lines = {}
     local line_to_file = {}
@@ -160,8 +161,12 @@ local function render_files(bufnr, winnr, files, current_file, git_root)
 
             -- Check if this is the current file
             local abs_path = vim.fs.normalize(git_root .. "/" .. entry.path)
+            local current_file =
+                vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
             local normalized_current = vim.fs.normalize(current_file)
-            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
+            if
+                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
+            then
                 current_line = #lines
             end
         end
@@ -419,8 +424,6 @@ function M.open(base)
         ensure_minidiff_overlay_enabled()
     end
 
-    local current_file = vim.fn.expand("%:p")
-
     get_diff_files(base, function(files, git_root)
         if #files == 0 then
             vim.notify("No changes in diff", vim.log.levels.INFO)
@@ -430,7 +433,7 @@ function M.open(base)
         local current_win = vim.api.nvim_get_current_win()
         local bufnr, winnr = create_split_buffer()
         local line_to_file, apply_line_highlights, highlight_current_file =
-            render_files(bufnr, winnr, files, current_file, git_root)
+            render_files(bufnr, winnr, files, git_root)
         local _, set_main_tab_map = setup_keymaps(
             bufnr,
             winnr,
