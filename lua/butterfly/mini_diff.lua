@@ -311,54 +311,6 @@ local function setup_keymaps(
         open_file_at(line_nr)
     end, { buffer = bufnr, nowait = true })
 
-    -- Next file on Tab
-    vim.keymap.set("n", "<Tab>", function()
-        local start_line = vim.api.nvim_win_get_cursor(0)[1]
-        local next_line = nil
-        for i = start_line + 1, #line_to_file do
-            if line_to_file[i] then
-                next_line = i
-                break
-            end
-        end
-        if not next_line then
-            for i = 1, start_line do
-                if line_to_file[i] then
-                    next_line = i
-                    break
-                end
-            end
-        end
-        if next_line then
-            vim.api.nvim_win_set_cursor(0, { next_line, 0 })
-            open_file_at(next_line)
-        end
-    end, { buffer = bufnr, nowait = true })
-
-    -- Previous file on Shift-Tab
-    vim.keymap.set("n", "<S-Tab>", function()
-        local start_line = vim.api.nvim_win_get_cursor(0)[1]
-        local prev_line = nil
-        for i = start_line - 1, 1, -1 do
-            if line_to_file[i] then
-                prev_line = i
-                break
-            end
-        end
-        if not prev_line then
-            for i = #line_to_file, start_line, -1 do
-                if line_to_file[i] then
-                    prev_line = i
-                    break
-                end
-            end
-        end
-        if prev_line then
-            vim.api.nvim_win_set_cursor(0, { prev_line, 0 })
-            open_file_at(prev_line)
-        end
-    end, { buffer = bufnr, nowait = true })
-
     if vim.api.nvim_win_is_valid(main_win) then
         attach_main_tab_map()
         vim.api.nvim_create_autocmd("BufEnter", {
@@ -406,11 +358,6 @@ local function setup_keymaps(
             vim.api.nvim_win_set_cursor(winnr, { line_nr, 0 })
         end
     end
-
-    -- Close on q
-    vim.keymap.set("n", "q", function()
-        vim.api.nvim_win_close(winnr, true)
-    end, { buffer = bufnr, nowait = true })
 
     return open_next_file, set_main_tab_map
 end
