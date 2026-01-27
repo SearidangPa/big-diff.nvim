@@ -2,7 +2,8 @@ local M = {}
 local truncate = require("butterfly.util_truncate")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
-local current_line_ns = vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
+local current_line_ns =
+    vim.api.nvim_create_namespace("MiniDiffHighlightCurrent")
 
 function M.create_split_buffer()
     vim.cmd("topleft vnew")
@@ -80,7 +81,9 @@ function M.render_files(bufnr, winnr, files, git_root)
             local current_file =
                 vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
             local normalized_current = vim.fs.normalize(current_file)
-            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
+            if
+                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
+            then
                 current_line = #lines
             end
         end

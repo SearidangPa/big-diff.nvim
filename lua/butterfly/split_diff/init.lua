@@ -23,8 +23,7 @@ end
 
 local function ensure_minidiff_overlay_enabled()
     local MiniDiff = require("mini.diff")
-    local state = require("mini.diff.state")
-    if not state.overlay then
+    if not require("mini.diff.state").overlay then
         MiniDiff.toggle_overlay()
     end
 end

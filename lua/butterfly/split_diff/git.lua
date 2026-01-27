@@ -80,7 +80,9 @@ function M.open_file_in_main_win(base, git_root, file, main_win)
     util_git.get_diff_hunks(base, file, function(hunks)
         local hunk_line = (hunks[1] and hunks[1].line) or 1
         vim.api.nvim_set_current_win(main_win)
-        vim.cmd("noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file))
+        vim.cmd(
+            "noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file)
+        )
 
         vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
 
