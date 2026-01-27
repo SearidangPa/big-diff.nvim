@@ -27,7 +27,7 @@ M.setup = function()
 
     set_hl()
 
-    vim.api.nvim_create_autocmd({ "ColorScheme", "OptionSet" }, {
+    vim.api.nvim_create_autocmd({ "ColorScheme" }, {
         callback = function(args)
             if args.event == "OptionSet" and args.match ~= "background" then
                 return
