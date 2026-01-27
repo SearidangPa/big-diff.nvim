@@ -16,25 +16,12 @@ local function clear_state()
     state.winnr = nil
 end
 
-local function set_minidiff_base_ref(ref)
-    vim.g.minidiff_git_base_ref = ref
-    vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
-end
-
-local function ensure_minidiff_overlay_enabled()
-    local MiniDiff = require("mini.diff")
-    if not require("mini.diff.state").overlay then
-        MiniDiff.toggle_overlay()
-    end
-end
-
 function M.open(base)
-    local base_arg = base
-    base = base or "HEAD"
-
-    if base_arg ~= nil then
-        set_minidiff_base_ref(base)
-        ensure_minidiff_overlay_enabled()
+    assert(base ~= "", "Base ref cannot be an empty string")
+    vim.g.minidiff_git_base_ref = base
+    vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
+    if not require("mini.diff.state").overlay then
+        require("mini.diff").toggle_overlay()
     end
 
     git.get_diff_files(base, function(files, git_root)
