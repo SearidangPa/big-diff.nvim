@@ -97,17 +97,11 @@ function M.render_files(bufnr, winnr, files, git_root)
         vim.api.nvim_buf_clear_namespace(bufnr, highlight_ns, 0, -1)
         for line_nr, hl_group in ipairs(highlights) do
             local line = lines[line_nr] or ""
-            vim.api.nvim_buf_set_extmark(
-                bufnr,
-                highlight_ns,
-                line_nr - 1,
-                0,
-                {
-                    hl_group = hl_group,
-                    end_row = line_nr - 1,
-                    end_col = #line,
-                }
-            )
+            vim.api.nvim_buf_set_extmark(bufnr, highlight_ns, line_nr - 1, 0, {
+                hl_group = hl_group,
+                end_row = line_nr - 1,
+                end_col = #line,
+            })
         end
     end
 
