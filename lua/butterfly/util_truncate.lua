@@ -29,7 +29,7 @@ local function normalize_opts(opts)
 end
 
 ---@class TruncateMiddleOpts
----@field part_len number Number of characters to keep from each part.
+---@field part_len? number Number of characters to keep from each part.
 ---@field no_truncate_max? number Maximum length of string to avoid truncation.
 ---@field empty_fallback_len? number Number of characters to return when input string has no parts.
 ---@field joiner? string String used to join parts.
