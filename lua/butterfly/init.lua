@@ -19,11 +19,7 @@ M.setup = function()
     local function set_hl()
         local file_name_hl = vim.o.background == "dark" and "#3E8FB0"
             or "#276983"
-        vim.api.nvim_set_hl(
-            0,
-            "ButterflyFileName",
-            { fg = file_name_hl, bold = true }
-        )
+        vim.api.nvim_set_hl(0, "ButterflyFileName", { fg = file_name_hl })
         local dir_name_hl = vim.o.background == "dark" and "#9CCFD9"
             or "#1EAC85"
         vim.api.nvim_set_hl(0, "ButterflyDir", { fg = dir_name_hl })
