@@ -4,14 +4,20 @@ M.setup = function()
     require("butterfly.jumplist_fzf")
     require("butterfly.git_diff_fzf")
     vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
+        local split_diff = require("butterfly.split_diff")
+        if split_diff.is_open() then
+            split_diff.close()
+            return
+        end
+
         if opts.args ~= "" then
-            require("butterfly.split_diff").open(opts.args)
+            split_diff.open(opts.args)
             return
         end
 
         require("butterfly.util_git").get_default_base_branch_async(
             function(branch)
-                require("butterfly.split_diff").open(branch)
+                split_diff.open(branch)
             end
         )
     end, { nargs = "?" })

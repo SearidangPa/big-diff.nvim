@@ -77,6 +77,17 @@ function M.is_open()
     return vim.bo[state.bufnr].filetype == "minidiff"
 end
 
+function M.close()
+    if state.winnr and vim.api.nvim_win_is_valid(state.winnr) then
+        vim.api.nvim_win_close(state.winnr, true)
+    end
+
+    if require("mini.diff.state").overlay then
+        require("mini.diff").toggle_overlay()
+    end
+    -- clear_state() will be called automatically by the BufWipeout autocmd
+end
+
 function M.next_file()
     if state.open_next_file then
         state.open_next_file()
