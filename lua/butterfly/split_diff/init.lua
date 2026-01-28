@@ -20,8 +20,8 @@ function M.open(base)
     assert(base ~= "", "Base ref cannot be an empty string")
     vim.g.minidiff_git_base_ref = base
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
-    if not require("mini.diff.state").overlay then
-        require("mini.diff").toggle_overlay()
+    if not require("big-diff.state").overlay then
+        require("big-diff").toggle_overlay()
     end
 
     git.get_diff_files(base, function(files, git_root)
@@ -82,8 +82,8 @@ function M.close()
         vim.api.nvim_win_close(state.winnr, true)
     end
 
-    if require("mini.diff.state").overlay then
-        require("mini.diff").toggle_overlay()
+    if require("big-diff.state").overlay then
+        require("big-diff").toggle_overlay()
     end
     -- clear_state() will be called automatically by the BufWipeout autocmd
 end
