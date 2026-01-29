@@ -23,7 +23,7 @@ function M.create_split_buffer()
     vim.wo[winnr].foldcolumn = "0"
     vim.wo[winnr].winfixwidth = true
 
-    local width = math.floor(vim.o.columns * 0.2)
+    local width = math.floor(vim.o.columns * 0.15)
     vim.api.nvim_win_set_width(winnr, width)
 
     return bufnr, winnr
