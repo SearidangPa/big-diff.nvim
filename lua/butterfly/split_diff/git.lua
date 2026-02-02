@@ -70,7 +70,7 @@ function M.get_diff_files(base, callback)
     )
 end
 
-function M.open_file_in_main_win(base, git_root, file, main_win)
+function M.open_file_in_main_win(base, git_root, file, main_win, on_open)
     if not file then
         return
     end
@@ -91,6 +91,9 @@ function M.open_file_in_main_win(base, git_root, file, main_win)
         fold_between_hunks_from_git(hunks)
         vim.api.nvim_win_set_cursor(0, { target_line, 0 })
         require("big-diff").enable(0)
+        if on_open then
+            on_open()
+        end
     end)
 end
 

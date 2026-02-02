@@ -108,6 +108,11 @@ function M.render_files(bufnr, winnr, files, git_root)
     apply_line_highlights()
 
     local function highlight_current_file(line_override)
+        if line_override == false then
+            current_line = nil
+            vim.api.nvim_buf_clear_namespace(bufnr, current_line_ns, 0, -1)
+            return
+        end
         local highlight_line = line_override or current_line
         if not highlight_line then
             for line_nr, file_index in ipairs(line_to_file_index) do
@@ -194,11 +199,50 @@ function M.setup_keymaps(
             return nil
         end
         for i, file in ipairs(files) do
-            if current_path == git_root .. "/" .. file then
+            local abs_path = vim.fs.normalize(git_root .. "/" .. file)
+            local normalized_current = vim.fs.normalize(current_path)
+            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
                 return i
             end
         end
     end
+
+    local function sync_current_file()
+        if not vim.api.nvim_win_is_valid(main_win) then
+            return
+        end
+        if not vim.api.nvim_buf_is_valid(bufnr) then
+            return
+        end
+        local current_index = find_current_file_index()
+        if not current_index then
+            highlight_current_file(false)
+            return
+        end
+        local line_nr = file_index_to_line(current_index)
+        if line_nr then
+            highlight_current_file(line_nr)
+            if vim.api.nvim_win_is_valid(winnr) then
+                vim.api.nvim_win_set_cursor(winnr, { line_nr, 0 })
+            end
+        end
+    end
+
+    local sync_group = vim.api.nvim_create_augroup(
+        "ButterflySplitDiffSync" .. bufnr,
+        { clear = true }
+    )
+    vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "WinEnter" }, {
+        group = sync_group,
+        callback = sync_current_file,
+    })
+    vim.api.nvim_create_autocmd("BufWipeout", {
+        group = sync_group,
+        buffer = bufnr,
+        callback = function()
+            pcall(vim.api.nvim_del_augroup_by_id, sync_group)
+        end,
+    })
 
     open_next_file = function()
         local current_index = find_current_file_index()
@@ -229,6 +273,7 @@ function M.setup_keymaps(
     return {
         open_next_file = open_next_file,
         open_previous_file = open_previous_file,
+        sync_current_file = sync_current_file,
     }
 end
 

@@ -60,7 +60,13 @@ function M.open(base)
         state.open_next_file = navigation.open_next_file
         state.open_previous_file = navigation.open_previous_file
 
-        git.open_file_in_main_win(base, git_root, files[1], current_win)
+        git.open_file_in_main_win(
+            base,
+            git_root,
+            files[1],
+            current_win,
+            navigation.sync_current_file
+        )
     end)
 end
 
