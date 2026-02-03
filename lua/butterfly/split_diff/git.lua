@@ -91,9 +91,35 @@ function M.get_diff_files(base, callback)
                 end
             end
 
-            vim.schedule(function()
-                callback(entries, git_root)
-            end)
+            local seen = {}
+            for _, entry in ipairs(entries) do
+                seen[entry.path] = true
+            end
+
+            vim.system(
+                { "git", "ls-files", "--others", "--exclude-standard", "-z" },
+                { text = true, cwd = git_root },
+                function(list_obj)
+                    local list_fields = vim.split(list_obj.stdout or "", "\0", {
+                        plain = true,
+                        trimempty = true,
+                    })
+                    for _, path in ipairs(list_fields) do
+                        if path ~= "" and not seen[path] then
+                            table.insert(entries, {
+                                path = path,
+                                status = "A",
+                                untracked = true,
+                            })
+                            seen[path] = true
+                        end
+                    end
+
+                    vim.schedule(function()
+                        callback(entries, git_root)
+                    end)
+                end
+            )
         end
     )
 end

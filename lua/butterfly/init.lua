@@ -24,12 +24,18 @@ M.setup = function()
             hi_overlay("MiniDiffOverContextBuf", { bg = "#1f3326" })
             hi_overlay("MiniDiffOverChange", { bg = "#330011" })
             hi_overlay("MiniDiffOverChangeBuf", { bg = "#2f3d22" })
+            vim.api.nvim_set_hl(0, "ButterflyUntracked", { bg = "#4F4626" })
         else
             hi_overlay("MiniDiffOverAdd", { bg = "#dafbe1" })
             hi_overlay("MiniDiffOverDelete", { bg = "#FFE0E0" })
+            vim.api.nvim_set_hl(0, "ButterflyUntracked", { bg = "#FEFEF9" })
         end
 
-        vim.api.nvim_set_hl(0, "ButterflyDeleted", { link = "MiniDiffOverDelete" })
+        vim.api.nvim_set_hl(
+            0,
+            "ButterflyDeleted",
+            { link = "MiniDiffOverDelete" }
+        )
     end
 
     set_hl()

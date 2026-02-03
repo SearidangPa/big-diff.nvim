@@ -43,11 +43,8 @@ function M.render_files(bufnr, winnr, files, git_root, main_win)
     end
     local current_path = nil
     local current_is_diff_path = false
-    local ok, diff_path = pcall(
-        vim.api.nvim_buf_get_var,
-        current_buf,
-        "butterfly_diff_path"
-    )
+    local ok, diff_path =
+        pcall(vim.api.nvim_buf_get_var, current_buf, "butterfly_diff_path")
     if ok and diff_path and diff_path ~= "" then
         current_path = diff_path
         current_is_diff_path = true
@@ -66,7 +63,12 @@ function M.render_files(bufnr, winnr, files, git_root, main_win)
             groups[group] = {}
             table.insert(group_names, group)
         end
-        table.insert(groups[group], { index = i, path = file, status = entry.status })
+        table.insert(groups[group], {
+            index = i,
+            path = file,
+            status = entry.status,
+            untracked = entry.untracked,
+        })
     end
 
     local highlights = {}
@@ -96,7 +98,9 @@ function M.render_files(bufnr, winnr, files, git_root, main_win)
                 )
             table.insert(lines, display)
             line_to_file_index[#lines] = entry.index
-            if entry.status == "A" then
+            if entry.untracked then
+                highlights[#lines] = "ButterflyUntracked"
+            elseif entry.status == "A" then
                 highlights[#lines] = "MiniDiffOverAdd"
             else
                 highlights[#lines] = "Comment"
@@ -243,7 +247,8 @@ function M.setup_keymaps(
         )
         if ok and diff_path and diff_path ~= "" then
             for i, entry in ipairs(files) do
-                local entry_path = type(entry) == "table" and entry.path or entry
+                local entry_path = type(entry) == "table" and entry.path
+                    or entry
                 if entry_path == diff_path then
                     return i
                 end
@@ -256,11 +261,9 @@ function M.setup_keymaps(
         end
         for i, entry in ipairs(files) do
             local entry_path = type(entry) == "table" and entry.path or entry
-            local entry_status =
-                type(entry) == "table" and entry.status or nil
+            local entry_status = type(entry) == "table" and entry.status or nil
             if entry_status ~= "D" then
-                local abs_path =
-                    vim.fs.normalize(git_root .. "/" .. entry_path)
+                local abs_path = vim.fs.normalize(git_root .. "/" .. entry_path)
                 local normalized_current = vim.fs.normalize(current_path)
                 if
                     vim.fn.resolve(abs_path)
