@@ -201,7 +201,9 @@ function M.setup_keymaps(
         for i, file in ipairs(files) do
             local abs_path = vim.fs.normalize(git_root .. "/" .. file)
             local normalized_current = vim.fs.normalize(current_path)
-            if vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current) then
+            if
+                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
+            then
                 return i
             end
         end
