@@ -29,7 +29,7 @@ function M.create_split_buffer()
     return bufnr, winnr
 end
 
-function M.render_files(bufnr, winnr, files, git_root)
+function M.render_files(bufnr, winnr, files, git_root, main_win)
     local width = vim.api.nvim_win_get_width(winnr) - 2
     local lines = {}
     local line_to_file_index = {}
@@ -37,14 +37,36 @@ function M.render_files(bufnr, winnr, files, git_root)
     local groups = {}
     local group_names = {}
 
-    for i, file in ipairs(files) do
+    local current_buf = vim.api.nvim_get_current_buf()
+    if main_win and vim.api.nvim_win_is_valid(main_win) then
+        current_buf = vim.api.nvim_win_get_buf(main_win)
+    end
+    local current_path = nil
+    local current_is_diff_path = false
+    local ok, diff_path = pcall(
+        vim.api.nvim_buf_get_var,
+        current_buf,
+        "butterfly_diff_path"
+    )
+    if ok and diff_path and diff_path ~= "" then
+        current_path = diff_path
+        current_is_diff_path = true
+    else
+        local current_file = vim.api.nvim_buf_get_name(current_buf)
+        if current_file ~= "" then
+            current_path = vim.fs.normalize(current_file)
+        end
+    end
+
+    for i, entry in ipairs(files) do
+        local file = type(entry) == "table" and entry.path or entry
         local parent = vim.fn.fnamemodify(file, ":h")
         local group = parent == "." and "." or vim.fn.fnamemodify(parent, ":t")
         if not groups[group] then
             groups[group] = {}
             table.insert(group_names, group)
         end
-        table.insert(groups[group], { index = i, path = file })
+        table.insert(groups[group], { index = i, path = file, status = entry.status })
     end
 
     local highlights = {}
@@ -74,17 +96,28 @@ function M.render_files(bufnr, winnr, files, git_root)
                 )
             table.insert(lines, display)
             line_to_file_index[#lines] = entry.index
-            highlights[#lines] = "Comment"
+            if entry.status == "A" then
+                highlights[#lines] = "MiniDiffOverAdd"
+            else
+                highlights[#lines] = "Comment"
+            end
 
             -- Check if this is the current file
-            local abs_path = vim.fs.normalize(git_root .. "/" .. entry.path)
-            local current_file =
-                vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
-            local normalized_current = vim.fs.normalize(current_file)
-            if
-                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
-            then
-                current_line = #lines
+            if current_path then
+                if current_is_diff_path then
+                    if entry.path == current_path then
+                        current_line = #lines
+                    end
+                else
+                    local abs_path =
+                        vim.fs.normalize(git_root .. "/" .. entry.path)
+                    if
+                        vim.fn.resolve(abs_path)
+                        == vim.fn.resolve(current_path)
+                    then
+                        current_line = #lines
+                    end
+                end
             end
         end
     end
@@ -166,15 +199,15 @@ function M.setup_keymaps(
     end
 
     local function open_file_by_index(file_index)
-        local file = file_index and files[file_index]
-        if not file then
+        local file_entry = file_index and files[file_index]
+        if not file_entry then
             return
         end
         if not vim.api.nvim_win_is_valid(main_win) then
             return
         end
 
-        open_file_in_main_win(base, git_root, file, main_win)
+        open_file_in_main_win(base, git_root, file_entry, main_win)
 
         if vim.api.nvim_buf_is_valid(bufnr) then
             apply_line_highlights()
@@ -194,17 +227,38 @@ function M.setup_keymaps(
 
     local function find_current_file_index()
         local current_bufnr = vim.api.nvim_win_get_buf(main_win)
+        local ok, diff_path = pcall(
+            vim.api.nvim_buf_get_var,
+            current_bufnr,
+            "butterfly_diff_path"
+        )
+        if ok and diff_path and diff_path ~= "" then
+            for i, entry in ipairs(files) do
+                local entry_path = type(entry) == "table" and entry.path or entry
+                if entry_path == diff_path then
+                    return i
+                end
+            end
+            return nil
+        end
         local current_path = vim.api.nvim_buf_get_name(current_bufnr)
         if current_path == "" then
             return nil
         end
-        for i, file in ipairs(files) do
-            local abs_path = vim.fs.normalize(git_root .. "/" .. file)
-            local normalized_current = vim.fs.normalize(current_path)
-            if
-                vim.fn.resolve(abs_path) == vim.fn.resolve(normalized_current)
-            then
-                return i
+        for i, entry in ipairs(files) do
+            local entry_path = type(entry) == "table" and entry.path or entry
+            local entry_status =
+                type(entry) == "table" and entry.status or nil
+            if entry_status ~= "D" then
+                local abs_path =
+                    vim.fs.normalize(git_root .. "/" .. entry_path)
+                local normalized_current = vim.fs.normalize(current_path)
+                if
+                    vim.fn.resolve(abs_path)
+                    == vim.fn.resolve(normalized_current)
+                then
+                    return i
+                end
             end
         end
     end

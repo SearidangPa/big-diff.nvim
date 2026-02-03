@@ -43,7 +43,7 @@ function M.open(base)
             end,
         })
         local line_to_file_index, apply_line_highlights, highlight_current_file =
-            ui.render_files(bufnr, winnr, files, git_root)
+            ui.render_files(bufnr, winnr, files, git_root, current_win)
 
         local navigation = ui.setup_keymaps(
             bufnr,

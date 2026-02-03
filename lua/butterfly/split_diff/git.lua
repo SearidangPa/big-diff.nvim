@@ -56,27 +56,115 @@ end
 function M.get_diff_files(base, callback)
     local git_root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
     vim.system(
-        { "git", "diff", "--name-only", base },
+        { "git", "diff", "--name-status", "-z", base },
         { text = true, cwd = git_root },
         function(obj)
-            local files = {}
-            for line in (obj.stdout or ""):gmatch("[^\n]+") do
-                table.insert(files, line)
+            local entries = {}
+            local fields = vim.split(obj.stdout or "", "\0", {
+                plain = true,
+                trimempty = true,
+            })
+            local i = 1
+            while i <= #fields do
+                local status = fields[i]
+                if not status then
+                    break
+                end
+                local code = status:sub(1, 1)
+                if code == "R" or code == "C" then
+                    local old_path = fields[i + 1]
+                    local new_path = fields[i + 2]
+                    if new_path then
+                        table.insert(entries, {
+                            path = new_path,
+                            status = code,
+                            orig_path = old_path,
+                        })
+                    end
+                    i = i + 3
+                else
+                    local path = fields[i + 1]
+                    if path then
+                        table.insert(entries, { path = path, status = code })
+                    end
+                    i = i + 2
+                end
             end
+
             vim.schedule(function()
-                callback(files, git_root)
+                callback(entries, git_root)
             end)
         end
     )
 end
 
-function M.open_file_in_main_win(base, git_root, file, main_win, on_open)
-    if not file then
+function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
+    local file = entry
+    local status = nil
+    if type(entry) == "table" then
+        file = entry.path
+        status = entry.status
+    end
+    if not file or file == "" then
         return
     end
     if not vim.api.nvim_win_is_valid(main_win) then
         return
     end
+
+    if status == "D" then
+        vim.api.nvim_set_current_win(main_win)
+        local buf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_win_set_buf(main_win, buf)
+        vim.api.nvim_buf_set_name(buf, "butterfly://deleted/" .. file)
+        vim.bo[buf].buftype = "nofile"
+        vim.bo[buf].bufhidden = "wipe"
+        vim.bo[buf].swapfile = false
+        vim.bo[buf].modifiable = true
+
+        local ft = vim.filetype.match({ filename = file })
+        if ft then
+            vim.bo[buf].filetype = ft
+        end
+
+        vim.system({
+            "git",
+            "-C",
+            git_root,
+            "show",
+            string.format("%s:%s", base, file),
+        }, { text = true }, function(obj)
+            local text = obj.stdout or ""
+            local lines = vim.split(text, "\n", { plain = true })
+            if #lines > 0 and lines[#lines] == "" then
+                table.remove(lines, #lines)
+            end
+            if obj.code ~= 0 then
+                lines = { "Deleted file contents unavailable: " .. file }
+            end
+
+            vim.schedule(function()
+                if not vim.api.nvim_buf_is_valid(buf) then
+                    return
+                end
+                vim.bo[buf].modifiable = true
+                vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+                vim.bo[buf].modifiable = false
+                vim.bo[buf].readonly = true
+                vim.api.nvim_win_set_cursor(main_win, { 1, 0 })
+                vim.api.nvim_exec_autocmds("BufReadPost", { buffer = buf })
+                vim.b[buf].butterfly_diff_path = file
+                vim.b[buf].butterfly_diff_status = status
+                vim.wo[main_win].winhl =
+                    "Normal:ButterflyDeleted,NormalNC:ButterflyDeleted"
+                if on_open then
+                    on_open()
+                end
+            end)
+        end)
+        return
+    end
+
     util_git.get_diff_hunks(base, file, function(hunks)
         local hunk_line = (hunks[1] and hunks[1].line) or 1
         vim.api.nvim_set_current_win(main_win)
@@ -85,6 +173,11 @@ function M.open_file_in_main_win(base, git_root, file, main_win, on_open)
         )
 
         vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
+        if vim.api.nvim_win_is_valid(main_win) then
+            vim.wo[main_win].winhl = ""
+        end
+        vim.b.butterfly_diff_path = file
+        vim.b.butterfly_diff_status = status or "M"
 
         local line_count = vim.api.nvim_buf_line_count(0)
         local target_line = math.max(1, math.min(hunk_line, line_count))

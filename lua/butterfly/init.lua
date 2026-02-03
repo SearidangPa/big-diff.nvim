@@ -5,12 +5,31 @@ M.setup = function()
     require("butterfly.git_diff_fzf")
 
     local function set_hl()
+        local function hi_overlay(group, opts)
+            vim.api.nvim_set_hl(0, group, opts)
+        end
+
         local file_name_hl = vim.o.background == "dark" and "#3E8FB0"
             or "#276983"
         vim.api.nvim_set_hl(0, "ButterflyFileName", { fg = file_name_hl })
         local dir_name_hl = vim.o.background == "dark" and "#9CCFD9"
             or "#1EAC85"
         vim.api.nvim_set_hl(0, "ButterflyDir", { fg = dir_name_hl })
+
+        local is_dark = vim.o.background == "dark"
+        if is_dark then
+            hi_overlay("MiniDiffOverAdd", { bg = "#243d2a" })
+            hi_overlay("MiniDiffOverDelete", { bg = "#3d2022" })
+            hi_overlay("MiniDiffOverContext", { bg = "#3a2426" })
+            hi_overlay("MiniDiffOverContextBuf", { bg = "#1f3326" })
+            hi_overlay("MiniDiffOverChange", { bg = "#330011" })
+            hi_overlay("MiniDiffOverChangeBuf", { bg = "#2f3d22" })
+        else
+            hi_overlay("MiniDiffOverAdd", { bg = "#dafbe1" })
+            hi_overlay("MiniDiffOverDelete", { bg = "#FFE0E0" })
+        end
+
+        vim.api.nvim_set_hl(0, "ButterflyDeleted", { link = "MiniDiffOverDelete" })
     end
 
     set_hl()
