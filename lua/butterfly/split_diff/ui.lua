@@ -190,6 +190,15 @@ function M.setup_keymaps(
     local open_next_file
     local open_previous_file
 
+    local file_sequence = {}
+    local file_sequence_pos = {}
+    for _, index in ipairs(line_to_file_index) do
+        if index and not file_sequence_pos[index] then
+            file_sequence_pos[index] = #file_sequence + 1
+            file_sequence[#file_sequence + 1] = index
+        end
+    end
+
     local function file_index_to_line(file_index)
         for line_nr, index in ipairs(line_to_file_index) do
             if index == file_index then
@@ -301,11 +310,17 @@ function M.setup_keymaps(
     })
 
     open_next_file = function()
-        local current_index = find_current_file_index()
-        local next_index = current_index and current_index + 1 or 1
-        if next_index > #files then
-            next_index = 1
+        if #file_sequence == 0 then
+            return
         end
+
+        local current_index = find_current_file_index()
+        local pos = current_index and file_sequence_pos[current_index] or nil
+        local next_pos = pos and (pos + 1) or 1
+        if next_pos > #file_sequence then
+            next_pos = 1
+        end
+        local next_index = file_sequence[next_pos]
         open_file_by_index(next_index)
         local line_nr = file_index_to_line(next_index)
         if line_nr and vim.api.nvim_win_is_valid(winnr) then
@@ -314,11 +329,17 @@ function M.setup_keymaps(
     end
 
     open_previous_file = function()
-        local current_index = find_current_file_index()
-        local prev_index = current_index and current_index - 1 or #files
-        if prev_index < 1 then
-            prev_index = #files
+        if #file_sequence == 0 then
+            return
         end
+
+        local current_index = find_current_file_index()
+        local pos = current_index and file_sequence_pos[current_index] or nil
+        local prev_pos = pos and (pos - 1) or #file_sequence
+        if prev_pos < 1 then
+            prev_pos = #file_sequence
+        end
+        local prev_index = file_sequence[prev_pos]
         open_file_by_index(prev_index)
         local line_nr = file_index_to_line(prev_index)
         if line_nr and vim.api.nvim_win_is_valid(winnr) then
