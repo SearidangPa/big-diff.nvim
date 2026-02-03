@@ -37,9 +37,16 @@ vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
         return
     end
 
-    require("butterfly.util_git").get_default_base_branch_async(function(branch)
-        split_diff.open(branch)
-    end)
+    -- No args: open Snacks picker for branch selection
+    Snacks.picker.git_branches({
+        all = true,
+        confirm = function(picker, item)
+            picker:close()
+            if item and item.branch then
+                split_diff.open(item.branch)
+            end
+        end,
+    })
 end, { nargs = "?" })
 
 function M.split_diff()
