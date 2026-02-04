@@ -7,6 +7,8 @@ local state = {
     open_previous_file = nil,
     bufnr = nil,
     winnr = nil,
+    original_base_ref = nil,
+    original_base_ref_set = false,
 }
 
 local function clear_state()
@@ -14,10 +16,26 @@ local function clear_state()
     state.open_previous_file = nil
     state.bufnr = nil
     state.winnr = nil
+    state.original_base_ref = nil
+    state.original_base_ref_set = false
+end
+
+local function restore_base_ref()
+    if not state.original_base_ref_set then
+        return
+    end
+    vim.g.minidiff_git_base_ref = state.original_base_ref
+    vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
+    state.original_base_ref = nil
+    state.original_base_ref_set = false
 end
 
 function M.open(base)
     assert(base ~= "", "Base ref cannot be an empty string")
+    if not state.original_base_ref_set then
+        state.original_base_ref = vim.g.minidiff_git_base_ref
+        state.original_base_ref_set = true
+    end
     vim.g.minidiff_git_base_ref = base
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
     if not require("big-diff.state").overlay then
@@ -38,6 +56,7 @@ function M.open(base)
             buffer = bufnr,
             callback = function()
                 if state.bufnr == bufnr then
+                    restore_base_ref()
                     clear_state()
                 end
             end,
@@ -84,6 +103,7 @@ function M.is_open()
 end
 
 function M.close()
+    restore_base_ref()
     if state.winnr and vim.api.nvim_win_is_valid(state.winnr) then
         vim.api.nvim_win_close(state.winnr, true)
     end
