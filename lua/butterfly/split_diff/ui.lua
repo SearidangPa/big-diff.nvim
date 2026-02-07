@@ -1,4 +1,3 @@
-local M = {}
 local truncate = require("butterfly.util_truncate")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
