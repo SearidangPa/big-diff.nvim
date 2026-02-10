@@ -89,6 +89,8 @@ function M.get_default_base_branch_async(callback, opts)
         local branch = ref:match("^refs/remotes/origin/(.+)$") or ""
         if branch == "" then
             branch = fallback
+        else
+            branch = "origin/" .. branch
         end
 
         cached.branch = branch
