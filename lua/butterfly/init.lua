@@ -74,7 +74,7 @@ vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
     })
 end, { nargs = "?" })
 
-function M.split_diff()
+function M.split_diff_main()
     local split_diff = require("butterfly.split_diff")
     if split_diff.is_open() then
         split_diff.close()
@@ -83,6 +83,15 @@ function M.split_diff()
     require("butterfly.util_git").get_default_base_branch_async(function(branch)
         split_diff.open(branch)
     end)
+end
+
+function M.split_diff()
+    local split_diff = require("butterfly.split_diff")
+    if split_diff.is_open() then
+        split_diff.close()
+        return
+    end
+    split_diff.open("HEAD")
 end
 
 ---@class ScopeInfo
