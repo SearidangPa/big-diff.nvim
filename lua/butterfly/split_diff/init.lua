@@ -1,6 +1,7 @@
 local M = {}
 local git = require("butterfly.split_diff.git")
 local ui = require("butterfly.split_diff.ui")
+local util_git = require("butterfly.util_git")
 
 local state = {
     open_next_file = nil,
@@ -118,6 +119,16 @@ function M.open(base)
 
     state.base = base
     state.main_win = vim.api.nvim_get_current_win()
+    local main_buf = vim.api.nvim_win_get_buf(state.main_win)
+    state.git_root = util_git.find_git_root(main_buf)
+    if not state.git_root then
+        vim.notify(
+            "Current buffer is not in a git repository",
+            vim.log.levels.WARN
+        )
+        clear_state()
+        return
+    end
 
     if not state.original_base_ref_set then
         state.original_base_ref = vim.g.minidiff_git_base_ref
@@ -173,7 +184,7 @@ function M.open(base)
             state.main_win,
             navigation.sync_current_file
         )
-    end)
+    end, { git_root = state.git_root, bufnr = main_buf })
 end
 
 function M.is_open()

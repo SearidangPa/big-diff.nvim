@@ -357,15 +357,21 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
     end
 
     -- Delegate to beaver for the walk-up-tree logic
-    local beaver = require 'beaver'
+    local beaver = require("beaver")
     local func_ctx = beaver.enclosing_function(bufnr, row)
     if func_ctx then
-        local sig_line = vim.api.nvim_buf_get_lines(bufnr, func_ctx.start_row, func_ctx.start_row + 1, false)[1] or ''
+        local sig_line = vim.api.nvim_buf_get_lines(
+            bufnr,
+            func_ctx.start_row,
+            func_ctx.start_row + 1,
+            false
+        )[1] or ""
         return {
             name = func_ctx.name,
             signature = sig_line,
             kind = "function",
-        }, ignored
+        },
+            ignored
     end
 
     return nil, ignored
@@ -688,15 +694,21 @@ function M.get_scope_at_line(filepath, line, opts)
     end
 
     -- Delegate to beaver for the walk-up-tree logic
-    local beaver = require 'beaver'
+    local beaver = require("beaver")
     local func_ctx = beaver.enclosing_function(bufnr, row)
     if func_ctx then
-        local sig_line = vim.api.nvim_buf_get_lines(bufnr, func_ctx.start_row, func_ctx.start_row + 1, false)[1] or ''
+        local sig_line = vim.api.nvim_buf_get_lines(
+            bufnr,
+            func_ctx.start_row,
+            func_ctx.start_row + 1,
+            false
+        )[1] or ""
         return {
             name = func_ctx.name,
             signature = sig_line,
             kind = "function",
-        }, check_ignored and ignored or nil
+        },
+            check_ignored and ignored or nil
     end
 
     return nil, check_ignored and ignored or nil

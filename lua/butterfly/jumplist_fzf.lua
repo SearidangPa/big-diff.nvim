@@ -245,6 +245,7 @@ function M._build_jump_items(opts, list, cwd, cur_buf, exclude_current)
                     file = file,
                     line = j.line,
                     col = j.col,
+                    pos = { j.line, j.col },
                     scope = scope,
                     context_line = context_line,
                     ft = ft,
@@ -337,22 +338,9 @@ function M.pick(opts)
             assign_jump_labels(picker)
         end,
         layout = {
+            preset = "ivy_split",
             layout = {
-                box = "horizontal",
-                width = vim.o.columns,
-                height = 0.7,
-                border = "rounded",
-                title = "{title} {live} {flags}",
-                {
-                    box = "vertical",
-                    width = vim.o.columns,
-                    {
-                        win = "input",
-                        height = 1,
-                        border = "bottom",
-                    },
-                    { win = "list", border = "none" },
-                },
+                height = 0.30,
             },
         },
         confirm = function(picker, item)

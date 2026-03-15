@@ -53,8 +53,17 @@ local function fold_between_hunks_from_git(hunks, context)
     end
 end
 
-function M.get_diff_files(base, callback)
-    local git_root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
+---@param opts? { git_root?: string, bufnr?: integer }
+function M.get_diff_files(base, callback, opts)
+    opts = opts or {}
+    local git_root = opts.git_root or util_git.find_git_root(opts.bufnr)
+    if not git_root or git_root == "" then
+        vim.schedule(function()
+            callback({}, nil)
+        end)
+        return
+    end
+
     vim.system(
         { "git", "diff", "--name-status", "-z", base },
         { text = true, cwd = git_root },
@@ -213,7 +222,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         if on_open then
             on_open()
         end
-    end)
+    end, { git_root = git_root })
 end
 
 return M
