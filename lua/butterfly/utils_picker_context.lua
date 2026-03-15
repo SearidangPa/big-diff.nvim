@@ -356,42 +356,16 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
         end
     end
 
-    -- Walk up tree to find scope
-    while node do
-        local node_type = node:type()
-        for _, scope_type in ipairs(scope_node_types) do
-            if node_type == scope_type then
-                local name = nil
-                for child in node:iter_children() do
-                    local child_type = child:type()
-                    if
-                        child_type == "name"
-                        or child_type == "identifier"
-                        or child_type == "field_identifier"
-                        or child_type == "type_identifier"
-                        or child_type == "dot_index_expression"
-                        or child_type == "method_index_expression"
-                    then
-                        name = vim.treesitter.get_node_text(child, bufnr)
-                        break
-                    end
-                end
-
-                if name then
-                    local signature = vim.treesitter.get_node_text(node, bufnr)
-                    if node_type == "type_spec" then
-                        signature = "type " .. signature
-                    end
-                    return {
-                        name = name,
-                        signature = signature,
-                        kind = "function",
-                    },
-                        ignored
-                end
-            end
-        end
-        node = node:parent()
+    -- Delegate to beaver for the walk-up-tree logic
+    local beaver = require 'beaver'
+    local func_ctx = beaver.enclosing_function(bufnr, row)
+    if func_ctx then
+        local sig_line = vim.api.nvim_buf_get_lines(bufnr, func_ctx.start_row, func_ctx.start_row + 1, false)[1] or ''
+        return {
+            name = func_ctx.name,
+            signature = sig_line,
+            kind = "function",
+        }, ignored
     end
 
     return nil, ignored
@@ -713,46 +687,16 @@ function M.get_scope_at_line(filepath, line, opts)
         end
     end
 
-    while node do
-        local node_type = node:type()
-
-        for _, scope_type in ipairs(scope_node_types) do
-            if node_type == scope_type then
-                local name = nil
-
-                for child in node:iter_children() do
-                    local child_type = child:type()
-                    if
-                        child_type == "name"
-                        or child_type == "identifier"
-                        or child_type == "field_identifier"
-                        or child_type == "type_identifier"
-                        -- Lua: `function M.pick(...)` / `function M:pick(...)`
-                        or child_type == "dot_index_expression"
-                        or child_type == "method_index_expression"
-                    then
-                        name = vim.treesitter.get_node_text(child, bufnr)
-                        break
-                    end
-                end
-
-                if name then
-                    local signature = vim.treesitter.get_node_text(node, bufnr)
-                    if node_type == "type_spec" then
-                        signature = "type " .. signature
-                    end
-
-                    return {
-                        name = name,
-                        signature = signature,
-                        kind = "function",
-                    },
-                        check_ignored and ignored or nil
-                end
-            end
-        end
-
-        node = node:parent()
+    -- Delegate to beaver for the walk-up-tree logic
+    local beaver = require 'beaver'
+    local func_ctx = beaver.enclosing_function(bufnr, row)
+    if func_ctx then
+        local sig_line = vim.api.nvim_buf_get_lines(bufnr, func_ctx.start_row, func_ctx.start_row + 1, false)[1] or ''
+        return {
+            name = func_ctx.name,
+            signature = sig_line,
+            kind = "function",
+        }, check_ignored and ignored or nil
     end
 
     return nil, check_ignored and ignored or nil
