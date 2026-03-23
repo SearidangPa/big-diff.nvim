@@ -134,4 +134,54 @@ describe("util_git", function()
         eq("src/example.lua", entries[1].path)
         eq("M", entries[1].status)
     end)
+
+    it("prefers origin default branch over branch upstream", function()
+        local base_branch
+
+        run({ "git", "branch", "-M", "main" }, repo_dir)
+        run({
+            "git",
+            "update-ref",
+            "refs/remotes/origin/main",
+            "HEAD",
+        }, repo_dir)
+        run({
+            "git",
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        }, repo_dir)
+
+        run({ "git", "checkout", "-b", "feature" }, repo_dir)
+        run({
+            "git",
+            "update-ref",
+            "refs/remotes/origin/feature",
+            "HEAD",
+        }, repo_dir)
+        run({
+            "git",
+            "remote",
+            "add",
+            "origin",
+            "https://example.com/repo.git",
+        }, repo_dir)
+        run({ "git", "config", "branch.feature.remote", "origin" }, repo_dir)
+        run({
+            "git",
+            "config",
+            "branch.feature.merge",
+            "refs/heads/feature",
+        }, repo_dir)
+
+        util_git.get_default_base_branch_async(function(branch)
+            base_branch = branch
+        end, { git_root = repo_dir, no_cache = true })
+
+        assert(vim.wait(2000, function()
+            return base_branch ~= nil
+        end))
+
+        eq("origin/main", base_branch)
+    end)
 end)

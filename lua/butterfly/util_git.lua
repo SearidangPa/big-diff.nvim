@@ -130,7 +130,7 @@ function M.get_default_base_branch_async(callback, opts)
         run_callbacks(branch)
     end
 
-    local function fallback_to_origin_head()
+    local function resolve_origin_head(callback_fn)
         vim.system({
             "git",
             "-C",
@@ -139,74 +139,85 @@ function M.get_default_base_branch_async(callback, opts)
             "refs/remotes/origin/HEAD",
         }, { text = true }, function(obj)
             if obj.code ~= 0 then
-                run_callbacks(fallback)
+                callback_fn(nil)
                 return
             end
 
             local ref = vim.trim(obj.stdout or "")
             local branch = ref:match("^refs/remotes/origin/(.+)$") or ""
             if branch == "" then
-                finish(fallback)
+                callback_fn(nil)
                 return
             end
 
-            finish("origin/" .. branch)
+            callback_fn("origin/" .. branch)
         end)
     end
 
-    vim.system({
-        "git",
-        "-C",
-        git_root,
-        "rev-parse",
-        "--abbrev-ref",
-        "--symbolic-full-name",
-        "@{upstream}",
-    }, { text = true }, function(obj)
-        if obj.code == 0 then
-            local upstream = vim.trim(obj.stdout or "")
-            if upstream ~= "" then
-                finish(upstream)
-                return
-            end
-        end
-
+    local function fallback_to_upstream_or_current_branch()
         vim.system({
             "git",
             "-C",
             git_root,
             "rev-parse",
             "--abbrev-ref",
-            "HEAD",
-        }, { text = true }, function(branch_obj)
-            if branch_obj.code ~= 0 then
-                fallback_to_origin_head()
-                return
-            end
-
-            local current_branch = vim.trim(branch_obj.stdout or "")
-            if current_branch == "" or current_branch == "HEAD" then
-                fallback_to_origin_head()
-                return
+            "--symbolic-full-name",
+            "@{upstream}",
+        }, { text = true }, function(obj)
+            if obj.code == 0 then
+                local upstream = vim.trim(obj.stdout or "")
+                if upstream ~= "" then
+                    finish(upstream)
+                    return
+                end
             end
 
             vim.system({
                 "git",
                 "-C",
                 git_root,
-                "show-ref",
-                "--verify",
-                "--quiet",
-                "refs/remotes/origin/" .. current_branch,
-            }, { text = true }, function(ref_obj)
-                if ref_obj.code == 0 then
-                    finish("origin/" .. current_branch)
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+            }, { text = true }, function(branch_obj)
+                if branch_obj.code ~= 0 then
+                    run_callbacks(fallback)
                     return
                 end
 
-                fallback_to_origin_head()
+                local current_branch = vim.trim(branch_obj.stdout or "")
+                if current_branch == "" or current_branch == "HEAD" then
+                    run_callbacks(fallback)
+                    return
+                end
+
+                vim.system({
+                    "git",
+                    "-C",
+                    git_root,
+                    "show-ref",
+                    "--verify",
+                    "--quiet",
+                    "refs/remotes/origin/" .. current_branch,
+                }, { text = true }, function(ref_obj)
+                    if ref_obj.code == 0 then
+                        finish("origin/" .. current_branch)
+                        return
+                    end
+
+                    run_callbacks(fallback)
+                end)
             end)
         end)
+    end
+
+    resolve_origin_head(function(origin_head)
+        if origin_head and origin_head ~= "" then
+            finish(origin_head)
+            return
+        end
+
+        fallback_to_upstream_or_current_branch()
     end)
 end
 
@@ -230,10 +241,7 @@ function M.get_diff_hunks(base, this_file, callback, opts)
     cmd[#cmd + 1] = "--unified=0"
     if this_file and this_file ~= "" then
         local diff_file = this_file
-        if
-            git_root and git_root ~= ""
-            and is_absolute_path(this_file)
-        then
+        if git_root and git_root ~= "" and is_absolute_path(this_file) then
             diff_file = M.to_repo_relative_path(this_file, git_root)
         end
         cmd[#cmd + 1] = "--"
