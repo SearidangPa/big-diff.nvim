@@ -62,10 +62,10 @@ end
 
 local function is_test_path(file_path)
 	return file_path:match("^integration_tests[/\\]")
-		or file_path:match("[^%w]integration_tests[/\\]")
-		or file_path:match("[/\\]integration_tests[/\\]")
-		or file_path:match("_test%.[^/\\]+$")
-		or file_path:match("_spec%.lua$")
+		 or file_path:match("[^%w]integration_tests[/\\]")
+		 or file_path:match("[/\\]integration_tests[/\\]")
+		 or file_path:match("_test%.[^/\\]+$")
+		 or file_path:match("_spec%.lua$")
 end
 
 local function format_item(item, opts)
@@ -156,7 +156,7 @@ local function process_hunks_and_show_picker(opts, base, hunks)
 
 		-- Single batch call: get all scopes + file cache (parses treesitter once)
 		local scope_results, file_cache =
-			ctx.batch_get_scopes(abs_file, lines, { check_ignored = true })
+			 ctx.batch_get_scopes(abs_file, lines, { check_ignored = true })
 
 		-- Get ft/lang from cache (already computed during batch_get_scopes)
 		local ft = file_cache and file_cache.ft or nil
@@ -188,7 +188,7 @@ local function process_hunks_and_show_picker(opts, base, hunks)
 
 			if is_new_file_hunk or not ignored then
 				local key = scope and scope.name
-					or ("line:" .. tostring(hunk.line))
+					 or ("line:" .. tostring(hunk.line))
 
 				if not seen[key] then
 					seen[key] = true
@@ -200,8 +200,8 @@ local function process_hunks_and_show_picker(opts, base, hunks)
 					end
 
 					local search_text = scope and scope.name
-						or context_line
-						or key
+						 or context_line
+						 or key
 
 					table.insert(children, {
 						file = abs_file,
@@ -268,10 +268,33 @@ local function process_hunks_and_show_picker(opts, base, hunks)
 
 			assign_jump_labels(picker)
 		end,
+
 		layout = {
-			preset = "ivy_split",
+			fullscreen = true,
 			layout = {
-				height = 0.30,
+				config = function(layout)
+					local root = layout.layout
+					if not root or root.box ~= "vertical" then
+						return
+					end
+
+					if root.min_height ~= 30 then
+						return
+					end
+
+					local list = root[2]
+					local preview = root[3]
+					if not list or list.win ~= "list" then
+						return
+					end
+
+					if not preview or preview.win ~= "preview" then
+						return
+					end
+
+					list.height = 0.4
+					preview.height = nil
+				end,
 			},
 		},
 		confirm = function(picker, item)
@@ -372,7 +395,7 @@ local function resolve_current_file(file)
 	file = strip_position_suffix(file)
 
 	local git_root = util_git.find_git_root_for_path(file)
-		or util_git.find_git_root()
+		 or util_git.find_git_root()
 	if not git_root then
 		return nil, nil
 	end
