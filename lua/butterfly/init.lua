@@ -1,4 +1,5 @@
 local M = {}
+local DEFAULT_BASE = {}
 
 M.setup = function()
     require("butterfly.jumplist_fzf")
@@ -50,75 +51,62 @@ M.setup = function()
     })
 end
 
-vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
-    local split_diff = require("butterfly.split_diff")
-    if split_diff.is_open() then
-        if not split_diff.are_folds_opened() then
-            split_diff.unfold_all()
-            split_diff.hide_file_tree()
-            return
-        end
-        if not split_diff.is_file_tree_visible() then
-            split_diff.show_file_tree()
-            return
-        end
+local function handle_open_split_diff(split_diff)
+    if not split_diff.is_open() then
+        return false
+    end
+
+    if not split_diff.are_folds_opened() then
+        split_diff.unfold_all()
+        split_diff.hide_file_tree()
+    elseif not split_diff.is_file_tree_visible() then
+        split_diff.show_file_tree()
+    else
         split_diff.close()
+    end
+
+    return true
+end
+
+local function toggle_split_diff(target)
+    local split_diff = require("butterfly.split_diff")
+    if handle_open_split_diff(split_diff) then
         return
     end
 
-    if opts.args ~= "" then
-        split_diff.open(opts.args)
+    if target == nil then
+        Snacks.picker.git_branches({
+            all = true,
+            confirm = function(picker, item)
+                picker:close()
+                if item and item.branch then
+                    split_diff.open(item.branch)
+                end
+            end,
+        })
         return
     end
 
-    -- No args: open Snacks picker for branch selection
-    Snacks.picker.git_branches({
-        all = true,
-        confirm = function(picker, item)
-            picker:close()
-            if item and item.branch then
-                split_diff.open(item.branch)
-            end
-        end,
-    })
+    if target == DEFAULT_BASE then
+        require("butterfly.util_git").get_default_base_branch_async(function(branch)
+            split_diff.open(branch)
+        end)
+        return
+    end
+
+    split_diff.open(target)
+end
+
+vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
+    toggle_split_diff(opts.args ~= "" and opts.args or nil)
 end, { nargs = "?" })
 
 function M.split_diff_main()
-    local split_diff = require("butterfly.split_diff")
-    if split_diff.is_open() then
-        if not split_diff.are_folds_opened() then
-            split_diff.unfold_all()
-            split_diff.hide_file_tree()
-            return
-        end
-        if not split_diff.is_file_tree_visible() then
-            split_diff.show_file_tree()
-            return
-        end
-        split_diff.close()
-        return
-    end
-    require("butterfly.util_git").get_default_base_branch_async(function(branch)
-        split_diff.open(branch)
-    end)
+    toggle_split_diff(DEFAULT_BASE)
 end
 
 function M.split_diff()
-    local split_diff = require("butterfly.split_diff")
-    if split_diff.is_open() then
-        if not split_diff.are_folds_opened() then
-            split_diff.unfold_all()
-            split_diff.hide_file_tree()
-            return
-        end
-        if not split_diff.is_file_tree_visible() then
-            split_diff.show_file_tree()
-            return
-        end
-        split_diff.close()
-        return
-    end
-    split_diff.open("HEAD")
+    toggle_split_diff("HEAD")
 end
 
 ---@class ScopeInfo
