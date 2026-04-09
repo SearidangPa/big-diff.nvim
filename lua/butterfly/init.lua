@@ -53,6 +53,15 @@ end
 vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
     local split_diff = require("butterfly.split_diff")
     if split_diff.is_open() then
+        if not split_diff.are_folds_opened() then
+            split_diff.unfold_all()
+            split_diff.hide_file_tree()
+            return
+        end
+        if not split_diff.is_file_tree_visible() then
+            split_diff.show_file_tree()
+            return
+        end
         split_diff.close()
         return
     end
@@ -77,6 +86,15 @@ end, { nargs = "?" })
 function M.split_diff_main()
     local split_diff = require("butterfly.split_diff")
     if split_diff.is_open() then
+        if not split_diff.are_folds_opened() then
+            split_diff.unfold_all()
+            split_diff.hide_file_tree()
+            return
+        end
+        if not split_diff.is_file_tree_visible() then
+            split_diff.show_file_tree()
+            return
+        end
         split_diff.close()
         return
     end
@@ -88,6 +106,15 @@ end
 function M.split_diff()
     local split_diff = require("butterfly.split_diff")
     if split_diff.is_open() then
+        if not split_diff.are_folds_opened() then
+            split_diff.unfold_all()
+            split_diff.hide_file_tree()
+            return
+        end
+        if not split_diff.is_file_tree_visible() then
+            split_diff.show_file_tree()
+            return
+        end
         split_diff.close()
         return
     end

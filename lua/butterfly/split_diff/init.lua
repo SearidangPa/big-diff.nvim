@@ -15,6 +15,7 @@ local state = {
     original_base_ref = nil,
     original_base_ref_set = false,
     overlay_enabled_by_split_diff = false,
+    folds_opened = false,
     session_id = 0,
 }
 
@@ -30,6 +31,7 @@ local function clear_state()
     state.original_base_ref = nil
     state.original_base_ref_set = false
     state.overlay_enabled_by_split_diff = false
+    state.folds_opened = false
 end
 
 local function restore_base_ref()
@@ -200,6 +202,9 @@ function M.show_file_tree()
         return
     end
     render_file_tree()
+    if state.main_win and vim.api.nvim_win_is_valid(state.main_win) then
+        vim.api.nvim_set_current_win(state.main_win)
+    end
 end
 
 function M.hide_file_tree()
@@ -237,6 +242,19 @@ function M.close()
     end
 
     clear_state()
+end
+
+function M.are_folds_opened()
+    return state.folds_opened
+end
+
+function M.unfold_all()
+    if state.main_win and vim.api.nvim_win_is_valid(state.main_win) then
+        vim.api.nvim_win_call(state.main_win, function()
+            vim.cmd("normal! zR")
+        end)
+    end
+    state.folds_opened = true
 end
 
 function M.next_file()
