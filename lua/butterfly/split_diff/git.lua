@@ -1,6 +1,18 @@
 local M = {}
 local util_git = require("butterfly.util_git")
 
+local function prepare_window_for_hunk_folds(win)
+    if not vim.api.nvim_win_is_valid(win) then
+        return false
+    end
+
+    -- Manual folds are required for :fold ranges to take effect.
+    vim.wo[win].foldmethod = "manual"
+    vim.wo[win].foldenable = true
+
+    return true
+end
+
 -- Fold non-hunk regions. hunks = { { line = N, count = M }, ... }
 local function fold_between_hunks_from_git(hunks, context)
     context = context or 2
@@ -213,6 +225,9 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         end
         vim.b.butterfly_diff_path = file
         vim.b.butterfly_diff_status = status or "M"
+        if not prepare_window_for_hunk_folds(main_win) then
+            return
+        end
 
         local line_count = vim.api.nvim_buf_line_count(0)
         local target_line = math.max(1, math.min(hunk_line, line_count))

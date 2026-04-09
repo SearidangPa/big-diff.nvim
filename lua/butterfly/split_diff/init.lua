@@ -14,6 +14,8 @@ local state = {
     main_win = nil,
     original_base_ref = nil,
     original_base_ref_set = false,
+    original_foldenable = nil,
+    original_foldmethod = nil,
     overlay_enabled_by_split_diff = false,
     folds_opened = false,
     session_id = 0,
@@ -30,6 +32,8 @@ local function clear_state()
     state.main_win = nil
     state.original_base_ref = nil
     state.original_base_ref_set = false
+    state.original_foldenable = nil
+    state.original_foldmethod = nil
     state.overlay_enabled_by_split_diff = false
     state.folds_opened = false
 end
@@ -42,6 +46,32 @@ local function restore_base_ref()
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
     state.original_base_ref = nil
     state.original_base_ref_set = false
+end
+
+local function capture_main_window_fold_options()
+    if state.original_foldmethod ~= nil then
+        return
+    end
+    if not (state.main_win and vim.api.nvim_win_is_valid(state.main_win)) then
+        return
+    end
+
+    state.original_foldmethod = vim.wo[state.main_win].foldmethod
+    state.original_foldenable = vim.wo[state.main_win].foldenable
+end
+
+local function restore_main_window_fold_options()
+    if state.original_foldmethod == nil then
+        return
+    end
+
+    if state.main_win and vim.api.nvim_win_is_valid(state.main_win) then
+        vim.wo[state.main_win].foldmethod = state.original_foldmethod
+        vim.wo[state.main_win].foldenable = state.original_foldenable
+    end
+
+    state.original_foldmethod = nil
+    state.original_foldenable = nil
 end
 
 local function is_file_tree_visible()
@@ -131,6 +161,7 @@ function M.open(base)
         clear_state()
         return
     end
+    capture_main_window_fold_options()
 
     if not state.original_base_ref_set then
         state.original_base_ref = vim.g.minidiff_git_base_ref
@@ -153,6 +184,7 @@ function M.open(base)
         if #files == 0 then
             vim.notify("No changes in diff", vim.log.levels.INFO)
             restore_base_ref()
+            restore_main_window_fold_options()
             if
                 state.overlay_enabled_by_split_diff
                 and require("big-diff.state").overlay
@@ -169,6 +201,7 @@ function M.open(base)
         local navigation = render_file_tree()
         if not navigation then
             restore_base_ref()
+            restore_main_window_fold_options()
             if
                 state.overlay_enabled_by_split_diff
                 and require("big-diff.state").overlay
@@ -229,6 +262,7 @@ function M.close()
     state.session_id = state.session_id + 1
 
     restore_base_ref()
+    restore_main_window_fold_options()
 
     if state.winnr and vim.api.nvim_win_is_valid(state.winnr) then
         vim.api.nvim_win_close(state.winnr, true)
