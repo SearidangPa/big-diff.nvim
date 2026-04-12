@@ -233,7 +233,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         local target_line = math.max(1, math.min(hunk_line, line_count))
         fold_between_hunks_from_git(hunks)
         vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-        require("big-diff").enable(0)
+        pcall(require("big-diff").enable, 0)
         if on_open then
             on_open()
         end
