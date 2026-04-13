@@ -350,10 +350,10 @@ function M.setup_keymaps(
         end
     end
 
-    vim.keymap.set("n", ">", open_next_file, { buffer = bufnr, nowait = true })
+    vim.keymap.set("n", "<C-.>", open_next_file, { buffer = bufnr, nowait = true })
     vim.keymap.set(
         "n",
-        "<",
+        "<C-,>",
         open_previous_file,
         { buffer = bufnr, nowait = true }
     )
