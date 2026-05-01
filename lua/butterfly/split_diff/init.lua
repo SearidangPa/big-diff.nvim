@@ -17,7 +17,7 @@ local state = {
     original_foldenable = nil,
     original_foldmethod = nil,
     overlay_enabled_by_split_diff = false,
-    folds_opened = false,
+    first_toggle_done = false,
     session_id = 0,
 }
 
@@ -35,7 +35,7 @@ local function clear_state()
     state.original_foldenable = nil
     state.original_foldmethod = nil
     state.overlay_enabled_by_split_diff = false
-    state.folds_opened = false
+    state.first_toggle_done = false
 end
 
 local function restore_base_ref()
@@ -278,8 +278,12 @@ function M.close()
     clear_state()
 end
 
-function M.are_folds_opened()
-    return state.folds_opened
+function M.has_done_first_toggle()
+    return state.first_toggle_done
+end
+
+function M.mark_first_toggle_done()
+    state.first_toggle_done = true
 end
 
 function M.unfold_all()
@@ -288,7 +292,6 @@ function M.unfold_all()
             vim.cmd("normal! zR")
         end)
     end
-    state.folds_opened = true
 end
 
 function M.next_file()

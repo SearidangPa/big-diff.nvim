@@ -56,8 +56,8 @@ local function handle_open_split_diff(split_diff)
         return false
     end
 
-    if not split_diff.are_folds_opened() then
-        split_diff.unfold_all()
+    if not split_diff.has_done_first_toggle() then
+        split_diff.mark_first_toggle_done()
         split_diff.hide_file_tree()
     elseif not split_diff.is_file_tree_visible() then
         split_diff.show_file_tree()
