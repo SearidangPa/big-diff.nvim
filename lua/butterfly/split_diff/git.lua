@@ -59,11 +59,12 @@ local function fold_between_hunks_from_git(hunks, context)
         table.insert(folds, { last_fold_start, line_count })
     end
 
-    -- Create folds, then leave them open so users can close them with zM.
+    -- Create folds closed by default. Users can open them with zR; avoid
+    -- recreating them on later visits so their fold state is preserved.
     for _, fold in ipairs(folds) do
         vim.cmd(string.format("%d,%dfold", fold[1], fold[2]))
-        vim.cmd(string.format("%d,%dfoldopen!", fold[1], fold[2]))
     end
+    vim.cmd("silent! %foldclose!")
 end
 
 ---@param opts? { git_root?: string, bufnr?: integer }
@@ -226,13 +227,20 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         end
         vim.b.butterfly_diff_path = file
         vim.b.butterfly_diff_status = status or "M"
-        if not prepare_window_for_hunk_folds(main_win) then
-            return
-        end
 
         local line_count = vim.api.nvim_buf_line_count(0)
         local target_line = math.max(1, math.min(hunk_line, line_count))
-        fold_between_hunks_from_git(hunks)
+        local folds_initialized = vim.b.butterfly_split_diff_fold_base == base
+            and vim.b.butterfly_split_diff_fold_path == file
+        if not folds_initialized then
+            if not prepare_window_for_hunk_folds(main_win) then
+                return
+            end
+            vim.cmd("silent! normal! zE")
+            fold_between_hunks_from_git(hunks)
+            vim.b.butterfly_split_diff_fold_base = base
+            vim.b.butterfly_split_diff_fold_path = file
+        end
         vim.api.nvim_win_set_cursor(0, { target_line, 0 })
         pcall(require("big-diff").enable, 0)
         if on_open then
