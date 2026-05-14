@@ -1,10 +1,10 @@
 local M = {}
 
 ---@class FileCache
----@field bufnr integer
+---@field buffer_number integer
 ---@field changedtick integer
----@field ft string
----@field lang string?
+---@field filetype string
+---@field treesitter_language string?
 ---@field parser vim.treesitter.LanguageTree?
 ---@field tree TSTree?
 ---@field root TSNode?
@@ -63,10 +63,10 @@ end
 
 local nvim_treesitter_loaded = false
 
----@param bufnr integer
----@param lang? string
+---@param buffer_number integer
+---@param treesitter_language? string
 ---@return vim.treesitter.LanguageTree?
-local function ensure_treesitter_parser(bufnr, lang)
+local function ensure_treesitter_parser(buffer_number, treesitter_language)
     if not nvim_treesitter_loaded then
         local lazy_ok, lazy = pcall(require, "lazy")
         if lazy_ok and lazy and type(lazy.load) == "function" then
@@ -81,7 +81,8 @@ local function ensure_treesitter_parser(bufnr, lang)
         nvim_treesitter_loaded = true
     end
 
-    local ok, parser = pcall(vim.treesitter.get_parser, bufnr, lang)
+    local ok, parser =
+        pcall(vim.treesitter.get_parser, buffer_number, treesitter_language)
     if ok then
         return parser
     end
@@ -90,18 +91,18 @@ local function ensure_treesitter_parser(bufnr, lang)
 end
 
 ---Pre-compute Go build tag lines (single pass at file load)
----@param bufnr integer
+---@param buffer_number integer
 ---@return table<number, boolean>
-local function compute_build_tag_lines(bufnr)
+local function compute_build_tag_lines(buffer_number)
     local lines_map = {}
-    local total = vim.api.nvim_buf_line_count(bufnr)
+    local total = vim.api.nvim_buf_line_count(buffer_number)
     if total == 0 then
         return lines_map
     end
 
     -- Build tags are always at top of file, read first 50 lines max
     local max_scan = math.min(total, 50)
-    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, max_scan, false)
+    local lines = vim.api.nvim_buf_get_lines(buffer_number, 0, max_scan, false)
 
     local in_build_region = false
     for i, line in ipairs(lines) do
@@ -123,38 +124,40 @@ local function compute_build_tag_lines(bufnr)
     return lines_map
 end
 
----@param abs_path string
----@param bufnr integer
+---@param absolute_path string
+---@param buffer_number integer
 ---@return table
-local function compute_file_cache_state(abs_path, bufnr)
-    if vim.bo[bufnr].filetype == "" then
-        local detected = vim.filetype.match({ filename = abs_path })
+local function compute_file_cache_state(absolute_path, buffer_number)
+    if vim.bo[buffer_number].filetype == "" then
+        local detected = vim.filetype.match({ filename = absolute_path })
         if detected and detected ~= "" then
-            vim.bo[bufnr].filetype = detected
+            vim.bo[buffer_number].filetype = detected
         end
     end
 
-    local ft = vim.bo[bufnr].filetype
-    local lang = ft and (vim.treesitter.language.get_lang(ft) or ft) or nil
-    local scope_node_types = M.scope_node_types_by_filetype[ft]
+    local filetype = vim.bo[buffer_number].filetype
+    local treesitter_language = filetype
+            and (vim.treesitter.language.get_lang(filetype) or filetype)
+        or nil
+    local scope_node_types = M.scope_node_types_by_filetype[filetype]
         or M.DEFAULT_SCOPE_NODE_TYPES
 
     local parser, tree, root
-    parser = ensure_treesitter_parser(bufnr, lang)
+    parser = ensure_treesitter_parser(buffer_number, treesitter_language)
     if parser then
         tree = parser:parse()[1]
         root = tree and tree:root() or nil
     end
 
     local build_tag_lines = {}
-    if ft == "go" then
-        build_tag_lines = compute_build_tag_lines(bufnr)
+    if filetype == "go" then
+        build_tag_lines = compute_build_tag_lines(buffer_number)
     end
 
     return {
-        changedtick = vim.api.nvim_buf_get_changedtick(bufnr),
-        ft = ft,
-        lang = lang,
+        changedtick = vim.api.nvim_buf_get_changedtick(buffer_number),
+        filetype = filetype,
+        treesitter_language = treesitter_language,
         parser = parser,
         tree = tree,
         root = root,
@@ -164,25 +167,27 @@ local function compute_file_cache_state(abs_path, bufnr)
 end
 
 ---Get or create a file cache entry (parses treesitter once per file)
----@param abs_path string
+---@param absolute_path string
 ---@return FileCache?
-local function get_or_create_file_cache(abs_path)
-    local existing = file_cache[abs_path]
+local function get_or_create_file_cache(absolute_path)
+    local existing = file_cache[absolute_path]
     if existing then
         -- If the buffer was wiped and re-created, rebuild cache.
-        if not vim.api.nvim_buf_is_valid(existing.bufnr) then
-            file_cache[abs_path] = nil
+        if not vim.api.nvim_buf_is_valid(existing.buffer_number) then
+            file_cache[absolute_path] = nil
         else
-            local tick = vim.api.nvim_buf_get_changedtick(existing.bufnr)
+            local tick =
+                vim.api.nvim_buf_get_changedtick(existing.buffer_number)
             if tick ~= existing.changedtick then
-                local bufnr = M.load_file_buffer(abs_path)
-                if bufnr == -1 then
+                local buffer_number = M.load_file_buffer(absolute_path)
+                if buffer_number == -1 then
                     return nil
                 end
 
-                local state = compute_file_cache_state(abs_path, bufnr)
+                local state =
+                    compute_file_cache_state(absolute_path, buffer_number)
 
-                existing.bufnr = bufnr
+                existing.buffer_number = buffer_number
                 existing.scope_cache = {}
                 for k, v in pairs(state) do
                     existing[k] = v
@@ -193,21 +198,21 @@ local function get_or_create_file_cache(abs_path)
         end
     end
 
-    local bufnr = M.load_file_buffer(abs_path)
-    if bufnr == -1 then
+    local buffer_number = M.load_file_buffer(absolute_path)
+    if buffer_number == -1 then
         return nil
     end
 
-    local state = compute_file_cache_state(abs_path, bufnr)
+    local state = compute_file_cache_state(absolute_path, buffer_number)
 
-    local cache = { bufnr = bufnr, scope_cache = {} }
+    local cache = { buffer_number = buffer_number, scope_cache = {} }
     for k, v in pairs(state) do
         cache[k] = v
     end
 
-    file_cache[abs_path] = cache
+    file_cache[absolute_path] = cache
 
-    return file_cache[abs_path]
+    return file_cache[absolute_path]
 end
 
 ---Clear file cache (useful for testing or when files change)
@@ -221,8 +226,8 @@ end
 ---@param check_ignored boolean
 ---@return ScopeInfo?, boolean
 local function compute_scope_at_line_cached(cache, line, check_ignored)
-    local bufnr = cache.bufnr
-    local ft = cache.ft
+    local buffer_number = cache.buffer_number
+    local filetype = cache.filetype
     local root = cache.root
     local scope_node_types = cache.scope_node_types
 
@@ -243,13 +248,14 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
 
         if not ignored then
             local function is_go_build_tag_comment(n)
-                if not n or ft ~= "go" then
+                if not n or filetype ~= "go" then
                     return false
                 end
                 if n:type() ~= "comment" then
                     return false
                 end
-                local text = vim.treesitter.get_node_text(n, bufnr) or ""
+                local text = vim.treesitter.get_node_text(n, buffer_number)
+                    or ""
                 return text:match("^//%s*go:build%s+.+") ~= nil
                     or text:match("^//%s*%+build%s+.+") ~= nil
             end
@@ -258,7 +264,7 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
                 if not n then
                     return false
                 end
-                local types = M.ignored_context_node_types_by_filetype[ft]
+                local types = M.ignored_context_node_types_by_filetype[filetype]
                 if not types then
                     return false
                 end
@@ -303,13 +309,16 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
                             or child_type == "dot_index_expression"
                             or child_type == "method_index_expression"
                         then
-                            name = vim.treesitter.get_node_text(child, bufnr)
+                            name = vim.treesitter.get_node_text(
+                                child,
+                                buffer_number
+                            )
                             break
                         end
                     end
                     if name then
                         local signature =
-                            vim.treesitter.get_node_text(sibling, bufnr)
+                            vim.treesitter.get_node_text(sibling, buffer_number)
                         if sibling_type == "type_spec" then
                             signature = "type " .. signature
                         end
@@ -358,10 +367,10 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
 
     -- Delegate to beaver for the walk-up-tree logic
     local beaver = require("beaver")
-    local func_ctx = beaver.enclosing_function(bufnr, row)
+    local func_ctx = beaver.enclosing_function(buffer_number, row)
     if func_ctx then
         local sig_line = vim.api.nvim_buf_get_lines(
-            bufnr,
+            buffer_number,
             func_ctx.start_row,
             func_ctx.start_row + 1,
             false
@@ -380,14 +389,14 @@ end
 ---Batch get scopes for multiple lines in a file (uses caching)
 ---@param filepath string
 ---@param lines number[]
----@param opts? { check_ignored?: boolean }
+---@param options? { check_ignored?: boolean }
 ---@return table<number, { scope: ScopeInfo?, ignored: boolean }>, FileCache?
-function M.batch_get_scopes(filepath, lines, opts)
-    opts = opts or {}
-    local check_ignored = opts.check_ignored or false
+function M.batch_get_scopes(filepath, lines, options)
+    options = options or {}
+    local check_ignored = options.check_ignored or false
 
-    local abs_path = vim.fn.fnamemodify(filepath, ":p")
-    local cache = get_or_create_file_cache(abs_path)
+    local absolute_path = vim.fn.fnamemodify(filepath, ":p")
+    local cache = get_or_create_file_cache(absolute_path)
 
     local results = {}
 
@@ -418,8 +427,8 @@ end
 ---@param filepath string
 ---@return FileCache?
 function M.get_file_cache(filepath)
-    local abs_path = vim.fn.fnamemodify(filepath, ":p")
-    return get_or_create_file_cache(abs_path)
+    local absolute_path = vim.fn.fnamemodify(filepath, ":p")
+    return get_or_create_file_cache(absolute_path)
 end
 
 M.tree_icons = {
@@ -428,44 +437,44 @@ M.tree_icons = {
     last = "└╴",
 }
 
----@param abs_path string
+---@param absolute_path string
 ---@return integer
-function M.load_file_buffer(abs_path)
-    local bufnr = vim.fn.bufnr(abs_path)
+function M.load_file_buffer(absolute_path)
+    local buffer_number = vim.fn.buffer_number(absolute_path)
 
-    if bufnr == -1 then
-        if not vim.loop.fs_stat(abs_path) then
+    if buffer_number == -1 then
+        if not vim.loop.fs_stat(absolute_path) then
             return -1
         end
 
-        bufnr = vim.fn.bufadd(abs_path)
+        buffer_number = vim.fn.bufadd(absolute_path)
     end
 
-    if vim.fn.bufloaded(bufnr) == 0 then
+    if vim.fn.bufloaded(buffer_number) == 0 then
         -- Suppress autocommands during buffer load to prevent screen flashing
         local old_eventignore = vim.o.eventignore
         vim.o.eventignore = "all"
-        vim.fn.bufload(bufnr)
+        vim.fn.bufload(buffer_number)
         vim.o.eventignore = old_eventignore
     end
 
-    return bufnr
+    return buffer_number
 end
 
 ---@param filepath string
 ---@return string?, string?
 function M.resolve_ft_and_lang(filepath)
     local abs = vim.fn.fnamemodify(filepath, ":p")
-    local ft = vim.filetype.match({ filename = abs })
+    local filetype = vim.filetype.match({ filename = abs })
 
-    if not ft or ft == "" then
-        local bufnr = vim.fn.bufnr(abs)
-        if bufnr ~= -1 then
-            ft = vim.bo[bufnr].filetype
+    if not filetype or filetype == "" then
+        local buffer_number = vim.fn.buffer_number(abs)
+        if buffer_number ~= -1 then
+            filetype = vim.bo[buffer_number].filetype
         end
     end
 
-    if not ft or ft == "" then
+    if not filetype or filetype == "" then
         local ext = filepath:match("%.([%w_]+)$")
         local map = {
             lua = "lua",
@@ -473,47 +482,51 @@ function M.resolve_ft_and_lang(filepath)
             zig = "zig",
             fish = "fish",
         }
-        ft = ext and map[ext] or nil
+        filetype = ext and map[ext] or nil
     end
 
-    local lang = ft and (vim.treesitter.language.get_lang(ft) or ft) or nil
-    return ft, lang
+    local treesitter_language = filetype
+            and (vim.treesitter.language.get_lang(filetype) or filetype)
+        or nil
+    return filetype, treesitter_language
 end
 
 ---@param filepath string
 ---@param line number
----@param opts? { check_ignored?: boolean, excluded_filetypes?: string[] }
+---@param options? { check_ignored?: boolean, excluded_filetypes?: string[] }
 ---@return ScopeInfo?, boolean?
-function M.get_scope_at_line(filepath, line, opts)
-    opts = opts or {}
-    local check_ignored = opts.check_ignored or false
-    local excluded_filetypes = opts.excluded_filetypes or {}
+function M.get_scope_at_line(filepath, line, options)
+    options = options or {}
+    local check_ignored = options.check_ignored or false
+    local excluded_filetypes = options.excluded_filetypes or {}
 
-    local abs_path = vim.fn.fnamemodify(filepath, ":p")
-    local bufnr = M.load_file_buffer(abs_path)
+    local absolute_path = vim.fn.fnamemodify(filepath, ":p")
+    local buffer_number = M.load_file_buffer(absolute_path)
 
-    if bufnr == -1 then
+    if buffer_number == -1 then
         return nil, check_ignored and false or nil
     end
 
-    if vim.bo[bufnr].filetype == "" then
-        local detected = vim.filetype.match({ filename = abs_path })
+    if vim.bo[buffer_number].filetype == "" then
+        local detected = vim.filetype.match({ filename = absolute_path })
         if detected and detected ~= "" then
-            vim.bo[bufnr].filetype = detected
+            vim.bo[buffer_number].filetype = detected
         end
     end
 
-    local ft = vim.bo[bufnr].filetype
+    local filetype = vim.bo[buffer_number].filetype
 
     for _, excluded in ipairs(excluded_filetypes) do
-        if ft == excluded then
+        if filetype == excluded then
             return nil, check_ignored and false or nil
         end
     end
 
-    local lang = ft and (vim.treesitter.language.get_lang(ft) or ft) or nil
+    local treesitter_language = filetype
+            and (vim.treesitter.language.get_lang(filetype) or filetype)
+        or nil
 
-    local parser = ensure_treesitter_parser(bufnr, lang)
+    local parser = ensure_treesitter_parser(buffer_number, treesitter_language)
     if not parser then
         return nil, check_ignored and false or nil
     end
@@ -527,14 +540,14 @@ function M.get_scope_at_line(filepath, line, opts)
     local root = tree:root()
     local node = root:named_descendant_for_range(row, 0, row, 0)
 
-    local scope_node_types = M.scope_node_types_by_filetype[ft]
+    local scope_node_types = M.scope_node_types_by_filetype[filetype]
         or M.DEFAULT_SCOPE_NODE_TYPES
 
     local ignored = false
 
     if check_ignored then
         local function is_go_build_tag_comment(n)
-            if not n or ft ~= "go" then
+            if not n or filetype ~= "go" then
                 return false
             end
 
@@ -542,18 +555,22 @@ function M.get_scope_at_line(filepath, line, opts)
                 return false
             end
 
-            local text = vim.treesitter.get_node_text(n, bufnr) or ""
+            local text = vim.treesitter.get_node_text(n, buffer_number) or ""
             return text:match("^//%s*go:build%s+.+") ~= nil
                 or text:match("^//%s*%+build%s+.+") ~= nil
         end
 
         local function is_go_build_tag_blank_line(row0)
-            if ft ~= "go" or row0 < 0 then
+            if filetype ~= "go" or row0 < 0 then
                 return false
             end
 
-            local cur = vim.api.nvim_buf_get_lines(bufnr, row0, row0 + 1, false)[1]
-                or ""
+            local cur = vim.api.nvim_buf_get_lines(
+                buffer_number,
+                row0,
+                row0 + 1,
+                false
+            )[1] or ""
             if not cur:match("^%s*$") then
                 return false
             end
@@ -565,8 +582,12 @@ function M.get_scope_at_line(filepath, line, opts)
                     break
                 end
 
-                local prev = vim.api.nvim_buf_get_lines(bufnr, r, r + 1, false)[1]
-                    or ""
+                local prev = vim.api.nvim_buf_get_lines(
+                    buffer_number,
+                    r,
+                    r + 1,
+                    false
+                )[1] or ""
                 if not prev:match("^%s*$") then
                     if
                         prev:match("^//%s*go:build%s+.+")
@@ -587,7 +608,7 @@ function M.get_scope_at_line(filepath, line, opts)
                 return false
             end
 
-            local types = M.ignored_context_node_types_by_filetype[ft]
+            local types = M.ignored_context_node_types_by_filetype[filetype]
             if not types then
                 return false
             end
@@ -637,13 +658,16 @@ function M.get_scope_at_line(filepath, line, opts)
                             or child_type == "dot_index_expression"
                             or child_type == "method_index_expression"
                         then
-                            name = vim.treesitter.get_node_text(child, bufnr)
+                            name = vim.treesitter.get_node_text(
+                                child,
+                                buffer_number
+                            )
                             break
                         end
                     end
                     if name then
                         local signature =
-                            vim.treesitter.get_node_text(sibling, bufnr)
+                            vim.treesitter.get_node_text(sibling, buffer_number)
                         if sibling_type == "type_spec" then
                             signature = "type " .. signature
                         end
@@ -695,10 +719,10 @@ function M.get_scope_at_line(filepath, line, opts)
 
     -- Delegate to beaver for the walk-up-tree logic
     local beaver = require("beaver")
-    local func_ctx = beaver.enclosing_function(bufnr, row)
+    local func_ctx = beaver.enclosing_function(buffer_number, row)
     if func_ctx then
         local sig_line = vim.api.nvim_buf_get_lines(
-            bufnr,
+            buffer_number,
             func_ctx.start_row,
             func_ctx.start_row + 1,
             false
@@ -716,28 +740,28 @@ end
 
 ---@param filepath string
 ---@param line number
----@param opts? { filter_punctuation?: boolean, excluded_filetypes?: string[] }
+---@param options? { filter_punctuation?: boolean, excluded_filetypes?: string[] }
 ---@return string?
-function M.get_context_line(filepath, line, opts)
-    opts = opts or {}
-    local filter_punctuation = opts.filter_punctuation or false
-    local excluded_filetypes = opts.excluded_filetypes or {}
+function M.get_context_line(filepath, line, options)
+    options = options or {}
+    local filter_punctuation = options.filter_punctuation or false
+    local excluded_filetypes = options.excluded_filetypes or {}
 
-    local abs_path = vim.fn.fnamemodify(filepath, ":p")
-    local bufnr = M.load_file_buffer(abs_path)
+    local absolute_path = vim.fn.fnamemodify(filepath, ":p")
+    local buffer_number = M.load_file_buffer(absolute_path)
 
-    if bufnr == -1 then
+    if buffer_number == -1 then
         return nil
     end
 
-    local ft = vim.bo[bufnr].filetype
+    local filetype = vim.bo[buffer_number].filetype
     for _, excluded in ipairs(excluded_filetypes) do
-        if ft == excluded then
+        if filetype == excluded then
             return nil
         end
     end
 
-    local total = vim.api.nvim_buf_line_count(bufnr)
+    local total = vim.api.nvim_buf_line_count(buffer_number)
     if total == 0 then
         return nil
     end
@@ -749,7 +773,7 @@ function M.get_context_line(filepath, line, opts)
             if e <= s then
                 return {}
             end
-            return vim.api.nvim_buf_get_lines(bufnr, s, e, false)
+            return vim.api.nvim_buf_get_lines(buffer_number, s, e, false)
         end
 
         local lines = get_lines(idx_start, num_lines)
@@ -792,57 +816,60 @@ function M.get_context_line(filepath, line, opts)
 end
 
 ---@param item table
----@param opts { header_hl_group: string, extra_highlights?: table, show_filename?: boolean, show_tree?: boolean }
+---@param options { header_hl_group: string, extra_highlights?: table, show_filename?: boolean, show_tree?: boolean }
 ---@return snacks.picker.Highlight[]
-function M.format_item(item, opts)
-    local ret = {} ---@type snacks.picker.Highlight[]
+function M.format_item(item, options)
+    local formatted_item = {} ---@type snacks.picker.Highlight[]
 
-    local show_filename = opts.show_filename ~= false
-    local show_tree = opts.show_tree ~= false
+    local show_filename = options.show_filename ~= false
+    local show_tree = options.show_tree ~= false
 
     if item.is_header then
         if not show_filename then
-            return ret
+            return formatted_item
         end
         local filename = vim.fn.fnamemodify(item.file, ":t")
-        ret[#ret + 1] = { filename, opts.header_hl_group }
-        return ret
+        formatted_item[#formatted_item + 1] =
+            { filename, options.header_hl_group }
+        return formatted_item
     end
 
     if show_tree then
         local icon = item.last and M.tree_icons.last or M.tree_icons.middle
-        ret[#ret + 1] = { icon, "SnacksPickerTree" }
-        ret[#ret + 1] = { " " }
+        formatted_item[#formatted_item + 1] = { icon, "SnacksPickerTree" }
+        formatted_item[#formatted_item + 1] = { " " }
     end
 
     if show_filename then
         local truncate = require("butterfly.util_truncate").truncate_middle
         local filename = truncate(vim.fn.fnamemodify(item.file, ":t"))
-        ret[#ret + 1] = { filename, "Comment" }
-        ret[#ret + 1] = { ": ", "Comment" }
+        formatted_item[#formatted_item + 1] = { filename, "Comment" }
+        formatted_item[#formatted_item + 1] = { ": ", "Comment" }
     end
 
-    local lang = item.lang
-    local ft = item.ft
-    local abs_path = vim.fn.fnamemodify(item.file, ":p")
-    local bufnr = M.load_file_buffer(abs_path)
+    local treesitter_language = item.treesitter_language or item.lang
+    local filetype = item.filetype or item.ft
+    local absolute_path = vim.fn.fnamemodify(item.file, ":p")
+    local buffer_number = M.load_file_buffer(absolute_path)
 
-    if (not ft or ft == "") and bufnr ~= -1 then
-        ft = vim.bo[bufnr].filetype
-        if ft == "" then
+    if (not filetype or filetype == "") and buffer_number ~= -1 then
+        filetype = vim.bo[buffer_number].filetype
+        if filetype == "" then
             local detected = vim.filetype.match({
-                filename = abs_path,
-                buf = bufnr,
+                filename = absolute_path,
+                buf = buffer_number,
             })
             if detected then
-                ft = detected
-                vim.bo[bufnr].filetype = ft
+                filetype = detected
+                vim.bo[buffer_number].filetype = filetype
             end
         end
     end
 
-    if not lang or lang == "" then
-        lang = ft and (vim.treesitter.language.get_lang(ft) or ft) or nil
+    if not treesitter_language or treesitter_language == "" then
+        treesitter_language = filetype
+                and (vim.treesitter.language.get_lang(filetype) or filetype)
+            or nil
     end
 
     if item.scope and item.scope.signature then
@@ -852,42 +879,48 @@ function M.format_item(item, opts)
         Snacks.picker.highlight.format(
             item,
             signature,
-            ret,
-            { lang = lang, ft = ft }
+            formatted_item,
+            { lang = treesitter_language, ft = filetype }
         )
 
-        if opts.extra_highlights then
-            Snacks.picker.highlight.highlight(ret, opts.extra_highlights)
+        if options.extra_highlights then
+            Snacks.picker.highlight.highlight(
+                formatted_item,
+                options.extra_highlights
+            )
         end
 
-        return ret
+        return formatted_item
     end
 
-    if bufnr == -1 then
-        ret[#ret + 1] = { "(file level)", "Comment" }
-        return ret
+    if buffer_number == -1 then
+        formatted_item[#formatted_item + 1] = { "(file level)", "Comment" }
+        return formatted_item
     end
 
     local line_content = item.context_line
         or M.get_context_line(item.file, item.line)
 
     if not line_content then
-        ret[#ret + 1] = { "(new file)", "Comment" }
-        return ret
+        formatted_item[#formatted_item + 1] = { "(new file)", "Comment" }
+        return formatted_item
     end
 
     Snacks.picker.highlight.format(
         item,
         line_content,
-        ret,
-        { lang = lang, ft = ft }
+        formatted_item,
+        { lang = treesitter_language, ft = filetype }
     )
 
-    if opts.extra_highlights then
-        Snacks.picker.highlight.highlight(ret, opts.extra_highlights)
+    if options.extra_highlights then
+        Snacks.picker.highlight.highlight(
+            formatted_item,
+            options.extra_highlights
+        )
     end
 
-    return ret
+    return formatted_item
 end
 
 return M

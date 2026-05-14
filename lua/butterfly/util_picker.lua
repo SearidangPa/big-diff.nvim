@@ -25,19 +25,19 @@ function M.regroup_by_parent(picker, matcher, show_headers)
     ---@type ButterflyPickerGroup[]
     local group_list = {}
 
-    local function ensure_group(key, parent, idx)
+    local function ensure_group(key, parent, item_index)
         local group = groups[key]
         if not group then
             group = {
                 parent = parent,
                 items = {},
                 score = 0,
-                min_idx = idx or math.huge,
+                min_idx = item_index or math.huge,
             }
             groups[key] = group
             group_list[#group_list + 1] = group
-        elseif idx and idx < group.min_idx then
-            group.min_idx = idx
+        elseif item_index and item_index < group.min_idx then
+            group.min_idx = item_index
         end
         return group
     end

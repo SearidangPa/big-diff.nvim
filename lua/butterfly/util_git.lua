@@ -40,11 +40,11 @@ local function find_git_root_from_path(path)
     return nil
 end
 
----@param bufnr? integer
+---@param buffer_number? integer
 ---@return string?
-function M.find_git_root(bufnr)
-    bufnr = bufnr or 0
-    local bufname = vim.api.nvim_buf_get_name(bufnr)
+function M.find_git_root(buffer_number)
+    buffer_number = buffer_number or 0
+    local bufname = vim.api.nvim_buf_get_name(buffer_number)
 
     local path
     if bufname == "" then
@@ -87,19 +87,19 @@ function M.to_repo_relative_path(filepath, git_root)
 end
 
 ---@param callback fun(branch: string)
----@param opts? { git_root?: string, fallback?: string, no_cache?: boolean }
-function M.get_default_base_branch_async(callback, opts)
-    opts = opts or {}
-    local fallback = opts.fallback or "main"
+---@param options? { git_root?: string, fallback?: string, no_cache?: boolean }
+function M.get_default_base_branch_async(callback, options)
+    options = options or {}
+    local fallback = options.fallback or "main"
 
-    local git_root = opts.git_root or M.find_git_root()
+    local git_root = options.git_root or M.find_git_root()
     if not git_root then
         callback(fallback)
         return
     end
 
     local cached = default_base_branch_cache[git_root]
-    if not opts.no_cache and cached and cached.branch then
+    if not options.no_cache and cached and cached.branch then
         callback(cached.branch)
         return
     end
@@ -224,12 +224,12 @@ end
 ---@param base? string
 ---@param this_file? string
 ---@param callback fun(hunks: table[])
----@param opts? { git_root?: string, bufnr?: integer }
-function M.get_diff_hunks(base, this_file, callback, opts)
+---@param options? { git_root?: string, buffer_number?: integer }
+function M.get_diff_hunks(base, this_file, callback, options)
     base = base or "HEAD"
 
-    opts = opts or {}
-    local git_root = opts.git_root or M.find_git_root(opts.bufnr)
+    options = options or {}
+    local git_root = options.git_root or M.find_git_root(options.bufnr)
 
     local cmd = { "git" }
     if git_root and git_root ~= "" then

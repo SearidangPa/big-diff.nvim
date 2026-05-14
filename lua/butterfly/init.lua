@@ -6,8 +6,8 @@ M.setup = function()
     require("butterfly.git_diff_fzf")
 
     local function set_hl()
-        local function hi_overlay(group, opts)
-            vim.api.nvim_set_hl(0, group, opts)
+        local function hi_overlay(group, options)
+            vim.api.nvim_set_hl(0, group, options)
         end
 
         local file_name_hl = vim.o.background == "dark" and "#3E8FB0"
@@ -88,17 +88,19 @@ local function toggle_split_diff(target)
     end
 
     if target == DEFAULT_BASE then
-        require("butterfly.util_git").get_default_base_branch_async(function(branch)
-            split_diff.open(branch)
-        end)
+        require("butterfly.util_git").get_default_base_branch_async(
+            function(branch)
+                split_diff.open(branch)
+            end
+        )
         return
     end
 
     split_diff.open(target)
 end
 
-vim.api.nvim_create_user_command("ButterflyDiff", function(opts)
-    toggle_split_diff(opts.args ~= "" and opts.args or nil)
+vim.api.nvim_create_user_command("ButterflyDiff", function(options)
+    toggle_split_diff(options.args ~= "" and options.args or nil)
 end, { nargs = "?" })
 
 function M.split_diff_main()

@@ -1,5 +1,5 @@
 local M = {}
-local util_git = require("butterfly.util_git")
+local git_util = require("butterfly.util_git")
 
 local function prepare_window_for_hunk_folds(win)
     if not vim.api.nvim_win_is_valid(win) then
@@ -67,10 +67,10 @@ local function fold_between_hunks_from_git(hunks, context)
     vim.cmd("silent! %foldclose!")
 end
 
----@param opts? { git_root?: string, bufnr?: integer }
-function M.get_diff_files(base, callback, opts)
-    opts = opts or {}
-    local git_root = opts.git_root or util_git.find_git_root(opts.bufnr)
+---@param options? { git_root?: string, buffer_number?: integer }
+function M.get_diff_files(base, callback, options)
+    options = options or {}
+    local git_root = options.git_root or git_util.find_git_root(options.bufnr)
     if not git_root or git_root == "" then
         vim.schedule(function()
             callback({}, nil)
@@ -171,9 +171,9 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         vim.bo[buf].swapfile = false
         vim.bo[buf].modifiable = true
 
-        local ft = vim.filetype.match({ filename = file })
-        if ft then
-            vim.bo[buf].filetype = ft
+        local filetype = vim.filetype.match({ filename = file })
+        if filetype then
+            vim.bo[buf].filetype = filetype
         end
 
         vim.system({
@@ -214,7 +214,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         return
     end
 
-    util_git.get_diff_hunks(base, file, function(hunks)
+    git_util.get_diff_hunks(base, file, function(hunks)
         local hunk_line = (hunks[1] and hunks[1].line) or 1
         vim.api.nvim_set_current_win(main_win)
         vim.cmd(

@@ -1,13 +1,13 @@
 local M = {}
 local git = require("butterfly.split_diff.git")
 local ui = require("butterfly.split_diff.ui")
-local util_git = require("butterfly.util_git")
+local git_util = require("butterfly.util_git")
 
 local state = {
     open_next_file = nil,
     open_previous_file = nil,
-    bufnr = nil,
-    winnr = nil,
+    buffer_number = nil,
+    window_number = nil,
     base = nil,
     files = nil,
     git_root = nil,
@@ -24,8 +24,8 @@ local state = {
 local function clear_state()
     state.open_next_file = nil
     state.open_previous_file = nil
-    state.bufnr = nil
-    state.winnr = nil
+    state.buffer_number = nil
+    state.window_number = nil
     state.base = nil
     state.files = nil
     state.git_root = nil
@@ -75,16 +75,16 @@ local function restore_main_window_fold_options()
 end
 
 local function is_file_tree_visible()
-    if not (state.bufnr and state.winnr) then
+    if not (state.buffer_number and state.window_number) then
         return false
     end
-    if not vim.api.nvim_buf_is_valid(state.bufnr) then
+    if not vim.api.nvim_buf_is_valid(state.buffer_number) then
         return false
     end
-    if not vim.api.nvim_win_is_valid(state.winnr) then
+    if not vim.api.nvim_win_is_valid(state.window_number) then
         return false
     end
-    return vim.bo[state.bufnr].filetype == "minidiff"
+    return vim.bo[state.buffer_number].filetype == "minidiff"
 end
 
 local function render_file_tree()
@@ -96,32 +96,32 @@ local function render_file_tree()
         state.main_win = vim.api.nvim_get_current_win()
     end
 
-    local bufnr, winnr = ui.create_split_buffer()
-    state.bufnr = bufnr
-    state.winnr = winnr
+    local buffer_number, window_number = ui.create_split_buffer()
+    state.buffer_number = buffer_number
+    state.window_number = window_number
 
     vim.api.nvim_create_autocmd("BufWipeout", {
-        buffer = bufnr,
+        buffer = buffer_number,
         callback = function()
-            if state.bufnr == bufnr then
-                state.bufnr = nil
-                state.winnr = nil
+            if state.buffer_number == buffer_number then
+                state.buffer_number = nil
+                state.window_number = nil
             end
         end,
     })
 
     local line_to_file_index, apply_line_highlights, highlight_current_file =
         ui.render_files(
-            bufnr,
-            winnr,
+            buffer_number,
+            window_number,
             state.files,
             state.git_root,
             state.main_win
         )
 
     local navigation = ui.setup_keymaps(
-        bufnr,
-        winnr,
+        buffer_number,
+        window_number,
         state.files,
         state.git_root,
         state.main_win,
@@ -152,7 +152,7 @@ function M.open(base)
     state.base = base
     state.main_win = vim.api.nvim_get_current_win()
     local main_buf = vim.api.nvim_win_get_buf(state.main_win)
-    state.git_root = util_git.find_git_root(main_buf)
+    state.git_root = git_util.find_git_root(main_buf)
     if not state.git_root then
         vim.notify(
             "Current buffer is not in a git repository",
@@ -219,7 +219,7 @@ function M.open(base)
             state.main_win,
             navigation.sync_current_file
         )
-    end, { git_root = state.git_root, bufnr = main_buf })
+    end, { git_root = state.git_root, buffer_number = main_buf })
 end
 
 function M.is_open()
@@ -241,8 +241,10 @@ function M.show_file_tree()
 end
 
 function M.hide_file_tree()
-    if state.winnr and vim.api.nvim_win_is_valid(state.winnr) then
-        vim.api.nvim_win_close(state.winnr, true)
+    if
+        state.window_number and vim.api.nvim_win_is_valid(state.window_number)
+    then
+        vim.api.nvim_win_close(state.window_number, true)
     end
 end
 
@@ -264,8 +266,10 @@ function M.close()
     restore_base_ref()
     restore_main_window_fold_options()
 
-    if state.winnr and vim.api.nvim_win_is_valid(state.winnr) then
-        vim.api.nvim_win_close(state.winnr, true)
+    if
+        state.window_number and vim.api.nvim_win_is_valid(state.window_number)
+    then
+        vim.api.nvim_win_close(state.window_number, true)
     end
 
     if
