@@ -264,8 +264,9 @@ local function process_hunks_and_show_picker(options, base, hunks)
             end
             jump_label_attached[picker] = true
 
-            local prev_on_done = picker.matcher.options.on_done
-            picker.matcher.options.on_done = function(matcher)
+            local matcher_opts = picker.matcher.opts or picker.matcher.options
+            local prev_on_done = matcher_opts.on_done
+            matcher_opts.on_done = function(matcher)
                 if prev_on_done then
                     prev_on_done(matcher)
                 end
