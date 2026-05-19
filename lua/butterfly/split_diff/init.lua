@@ -169,8 +169,8 @@ function M.open(base)
     end
     vim.g.minidiff_git_base_ref = base
     vim.api.nvim_exec_autocmds("User", { pattern = "MiniDiffRefresh" })
-    if not require("big-diff.state").overlay then
-        require("big-diff").toggle_overlay()
+    if not require("big-diff.nvim.state").overlay then
+        require("big-diff.nvim").toggle_overlay()
         state.overlay_enabled_by_split_diff = true
     else
         state.overlay_enabled_by_split_diff = false
@@ -187,9 +187,9 @@ function M.open(base)
             restore_main_window_fold_options()
             if
                 state.overlay_enabled_by_split_diff
-                and require("big-diff.state").overlay
+                and require("big-diff.nvim.state").overlay
             then
-                require("big-diff").toggle_overlay()
+                require("big-diff.nvim").toggle_overlay()
             end
             clear_state()
             return
@@ -204,9 +204,9 @@ function M.open(base)
             restore_main_window_fold_options()
             if
                 state.overlay_enabled_by_split_diff
-                and require("big-diff.state").overlay
+                and require("big-diff.nvim.state").overlay
             then
-                require("big-diff").toggle_overlay()
+                require("big-diff.nvim").toggle_overlay()
             end
             clear_state()
             return
@@ -274,9 +274,9 @@ function M.close()
 
     if
         state.overlay_enabled_by_split_diff
-        and require("big-diff.state").overlay
+        and require("big-diff.nvim.state").overlay
     then
-        require("big-diff").toggle_overlay()
+        require("big-diff.nvim").toggle_overlay()
     end
 
     clear_state()

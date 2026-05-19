@@ -242,7 +242,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             vim.b.butterfly_split_diff_fold_path = file
         end
         vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-        pcall(require("big-diff").enable, 0)
+        pcall(require("big-diff.nvim").enable, 0)
         if on_open then
             on_open()
         end
