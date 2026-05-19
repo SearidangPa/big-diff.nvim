@@ -215,37 +215,39 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
     end
 
     git_util.get_diff_hunks(base, file, function(hunks)
-        local hunk_line = (hunks[1] and hunks[1].line) or 1
-        vim.api.nvim_set_current_win(main_win)
-        vim.cmd(
-            "noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file)
-        )
+        git_util.get_diff_hunks(base, file, function(fold_hunks)
+            local hunk_line = (hunks[1] and hunks[1].line) or 1
+            vim.api.nvim_set_current_win(main_win)
+            vim.cmd(
+                "noautocmd edit " .. vim.fn.fnameescape(git_root .. "/" .. file)
+            )
 
-        vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
-        if vim.api.nvim_win_is_valid(main_win) then
-            vim.wo[main_win].winhl = ""
-        end
-        vim.b.butterfly_diff_path = file
-        vim.b.butterfly_diff_status = status or "M"
+            vim.api.nvim_exec_autocmds("BufReadPost", { buffer = 0 })
+            if vim.api.nvim_win_is_valid(main_win) then
+                vim.wo[main_win].winhl = ""
+            end
+            vim.b.butterfly_diff_path = file
+            vim.b.butterfly_diff_status = status or "M"
 
-        local line_count = vim.api.nvim_buf_line_count(0)
-        local target_line = math.max(1, math.min(hunk_line, line_count))
-        local folds_initialized = vim.b.butterfly_split_diff_fold_base == base
-            and vim.b.butterfly_split_diff_fold_path == file
-        if not folds_initialized then
+            local line_count = vim.api.nvim_buf_line_count(0)
+            local target_line = math.max(1, math.min(hunk_line, line_count))
+            -- Recreate folds on every open. :edit/:buffer reloads and other diff
+            -- plugins can clear or replace manual folds while buffer variables stay
+            -- set, so using a "folds initialized" flag leaves large unchanged
+            -- regions unfolded on subsequent visits.
             if not prepare_window_for_hunk_folds(main_win) then
                 return
             end
             vim.cmd("silent! normal! zE")
-            fold_between_hunks_from_git(hunks)
+            fold_between_hunks_from_git(#fold_hunks > 0 and fold_hunks or hunks)
             vim.b.butterfly_split_diff_fold_base = base
             vim.b.butterfly_split_diff_fold_path = file
-        end
-        vim.api.nvim_win_set_cursor(0, { target_line, 0 })
-        pcall(require("big-diff.nvim").enable, 0)
-        if on_open then
-            on_open()
-        end
+            vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+            pcall(require("big-diff.nvim").enable, 0)
+            if on_open then
+                on_open()
+            end
+        end, { git_root = git_root, ignore_whitespace = true })
     end, { git_root = git_root })
 end
 

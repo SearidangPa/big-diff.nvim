@@ -224,7 +224,7 @@ end
 ---@param base? string
 ---@param this_file? string
 ---@param callback fun(hunks: table[])
----@param options? { git_root?: string, buffer_number?: integer }
+---@param options? { git_root?: string, buffer_number?: integer, ignore_whitespace?: boolean }
 function M.get_diff_hunks(base, this_file, callback, options)
     base = base or "HEAD"
 
@@ -237,6 +237,9 @@ function M.get_diff_hunks(base, this_file, callback, options)
         cmd[#cmd + 1] = git_root
     end
     cmd[#cmd + 1] = "diff"
+    if options.ignore_whitespace then
+        cmd[#cmd + 1] = "--ignore-all-space"
+    end
     cmd[#cmd + 1] = base
     cmd[#cmd + 1] = "--unified=0"
     if this_file and this_file ~= "" then
@@ -258,13 +261,16 @@ function M.get_diff_hunks(base, this_file, callback, options)
             if file then
                 current_file = file
             elseif current_file then
-                local start_line, count = line:match("^@@ .* %+(%d+),?(%d*)")
+                local start_line, count = line:match("^@@ .* %+(%d+),(%d+)")
+                if not start_line then
+                    start_line = line:match("^@@ .* %+(%d+)")
+                    count = 1
+                end
                 if start_line then
-                    count = tonumber(count) or 1
                     table.insert(hunks, {
                         file = current_file,
                         line = tonumber(start_line),
-                        count = count,
+                        count = tonumber(count) or 1,
                     })
                 end
             end
