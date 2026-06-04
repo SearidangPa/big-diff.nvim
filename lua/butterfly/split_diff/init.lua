@@ -10,6 +10,8 @@ local state = {
     window_number = nil,
     base = nil,
     files = nil,
+    all_files = nil,
+    exclude_tests = false,
     git_root = nil,
     main_win = nil,
     original_base_ref = nil,
@@ -28,6 +30,8 @@ local function clear_state()
     state.window_number = nil
     state.base = nil
     state.files = nil
+    state.all_files = nil
+    state.exclude_tests = false
     state.git_root = nil
     state.main_win = nil
     state.original_base_ref = nil
@@ -87,7 +91,34 @@ local function is_file_tree_visible()
     return vim.bo[state.buffer_number].filetype == "minidiff"
 end
 
+local function is_test_path(file_path)
+    return file_path:match("^integration_tests[/\\]")
+        or file_path:match("[^%w]integration_tests[/\\]")
+        or file_path:match("[/\\]integration_tests[/\\]")
+        or file_path:match("_test%.[^/\\]+$")
+        or file_path:match("_spec%.lua$")
+end
+
+local function apply_file_filter()
+    if not state.all_files then
+        state.files = nil
+        return
+    end
+
+    if not state.exclude_tests then
+        state.files = state.all_files
+        return
+    end
+
+    state.files = vim.tbl_filter(function(entry)
+        local path = type(entry) == "table" and entry.path or entry
+        return not is_test_path(path)
+    end, state.all_files)
+end
+
 local function render_file_tree()
+    apply_file_filter()
+
     if not (state.base and state.files and state.git_root) then
         return nil
     end
@@ -129,7 +160,20 @@ local function render_file_tree()
         line_to_file_index,
         apply_line_highlights,
         highlight_current_file,
-        git.open_file_in_main_win
+        git.open_file_in_main_win,
+        function()
+            state.exclude_tests = not state.exclude_tests
+            M.hide_file_tree()
+            local navigation = render_file_tree()
+            if navigation then
+                navigation.sync_current_file()
+            end
+            vim.notify(
+                state.exclude_tests and "Excluded test files"
+                    or "Showing test files",
+                vim.log.levels.INFO
+            )
+        end
     )
 
     state.open_next_file = navigation.open_next_file
@@ -195,7 +239,7 @@ function M.open(base)
             return
         end
 
-        state.files = files
+        state.all_files = files
         state.git_root = git_root
 
         local navigation = render_file_tree()

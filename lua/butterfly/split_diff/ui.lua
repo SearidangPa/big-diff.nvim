@@ -205,7 +205,8 @@ function M.setup_keymaps(
     line_to_file_index,
     apply_line_highlights,
     highlight_current_file,
-    open_file_in_main_win
+    open_file_in_main_win,
+    toggle_exclude_tests
 )
     local open_next_file
     local open_previous_file
@@ -245,6 +246,14 @@ function M.setup_keymaps(
                 highlight_current_file(highlight_line)
             end
         end
+    end
+
+    if toggle_exclude_tests then
+        vim.keymap.set("n", "<Tab>", toggle_exclude_tests, {
+            buffer = buffer_number,
+            nowait = true,
+            desc = "Toggle test files",
+        })
     end
 
     -- Open file on Enter
