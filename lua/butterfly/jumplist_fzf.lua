@@ -228,18 +228,19 @@ function M._build_jump_items(
         local item_index = #jumps
         while item_index >= 1 do
             local j = jumps[item_index]
-            local scope = picker_context.get_scope_at_line(
-                file,
-                j.line,
-                { excluded_filetypes = EXCLUDED_FILETYPES }
-            )
+            local scope, ignored =
+                picker_context.get_scope_at_line(file, j.line, {
+                    check_ignored = true,
+                    excluded_filetypes = EXCLUDED_FILETYPES,
+                })
 
             -- Prefer de-duping by scope name ("per function"), since jumplist entries
             -- often land multiple times within the same function/method.
             local key = scope and scope.name
                 or ("line:" .. tostring(j.line) .. ":" .. tostring(j.col))
 
-            if not seen[key] then
+            -- `ignored` marks import-block / build-tag lines: never worth a jump entry.
+            if not ignored and not seen[key] then
                 seen[key] = true
 
                 local context_line = nil

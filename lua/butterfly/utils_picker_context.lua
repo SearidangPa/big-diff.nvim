@@ -11,6 +11,8 @@ local M = {}
 ---@field scope_node_types string[]
 ---@field scope_cache table<number, { scope: ScopeInfo?, ignored: boolean }>
 ---@field build_tag_lines table<number, boolean>
+---@field import_lines table<number, boolean>
+---@field ignored_cache table<number, boolean>
 
 ---@type table<string, FileCache>
 local file_cache = {}
@@ -42,7 +44,95 @@ M.ignored_context_node_types_by_filetype = {
         "import_spec",
         "import_spec_list",
     },
+    python = {
+        "import_statement",
+        "import_from_statement",
+        "future_import_statement",
+    },
+    javascript = { "import_statement" },
+    javascriptreact = { "import_statement" },
+    typescript = { "import_statement", "import_alias" },
+    typescriptreact = { "import_statement", "import_alias" },
+    rust = { "use_declaration" },
+    java = { "import_declaration" },
+    c = { "preproc_include" },
+    cpp = { "preproc_include" },
 }
+
+---Languages whose imports are plain statements without a dedicated treesitter
+---node type. Patterns are anchored at column 0, so an import-looking line nested
+---inside a function body is never treated as part of the import block.
+M.import_line_patterns_by_filetype = {
+    lua = {
+        "^local%s+[%w_][%w_,%s]*=%s*require%f[%W]",
+        "^local%s+[%w_][%w_,%s]*=%s*pcall%s*%(%s*require%f[%W]",
+        "^require%f[%W]",
+    },
+    zig = {
+        "^const%s+[%w_]+%s*=%s*@import%f[%W]",
+    },
+}
+
+---@param filetype string
+---@param line_text string
+---@return boolean
+local function matches_import_pattern(filetype, line_text)
+    local patterns = M.import_line_patterns_by_filetype[filetype]
+    if not patterns then
+        return false
+    end
+
+    for _, pattern in ipairs(patterns) do
+        if line_text:match(pattern) then
+            return true
+        end
+    end
+
+    return false
+end
+
+---Pre-compute the lines belonging to the import block (single pass at file load).
+---Blank lines are included only when they sit between two import lines, so an
+---import block split into groups still counts as one contiguous region.
+---@param buffer_number integer
+---@param filetype string
+---@return table<number, boolean>
+local function compute_import_lines(buffer_number, filetype)
+    local lines_map = {}
+    if not M.import_line_patterns_by_filetype[filetype] then
+        return lines_map
+    end
+
+    local lines = vim.api.nvim_buf_get_lines(buffer_number, 0, -1, false)
+
+    for i, line in ipairs(lines) do
+        if matches_import_pattern(filetype, line) then
+            lines_map[i] = true -- 1-indexed
+        end
+    end
+
+    local i = 1
+    while i <= #lines do
+        if not lines_map[i] and lines[i]:match("^%s*$") then
+            local blank_end = i
+            while blank_end < #lines and lines[blank_end + 1]:match("^%s*$") do
+                blank_end = blank_end + 1
+            end
+
+            if lines_map[i - 1] and lines_map[blank_end + 1] then
+                for blank = i, blank_end do
+                    lines_map[blank] = true
+                end
+            end
+
+            i = blank_end + 1
+        else
+            i = i + 1
+        end
+    end
+
+    return lines_map
+end
 
 M.comment_node_types = {
     "comment",
@@ -163,6 +253,7 @@ local function compute_file_cache_state(absolute_path, buffer_number)
         root = root,
         scope_node_types = scope_node_types,
         build_tag_lines = build_tag_lines,
+        import_lines = compute_import_lines(buffer_number, filetype),
     }
 end
 
@@ -189,6 +280,7 @@ local function get_or_create_file_cache(absolute_path)
 
                 existing.buffer_number = buffer_number
                 existing.scope_cache = {}
+                existing.ignored_cache = {}
                 for k, v in pairs(state) do
                     existing[k] = v
                 end
@@ -205,7 +297,8 @@ local function get_or_create_file_cache(absolute_path)
 
     local state = compute_file_cache_state(absolute_path, buffer_number)
 
-    local cache = { buffer_number = buffer_number, scope_cache = {} }
+    local cache =
+        { buffer_number = buffer_number, scope_cache = {}, ignored_cache = {} }
     for k, v in pairs(state) do
         cache[k] = v
     end
@@ -220,6 +313,98 @@ function M.clear_file_cache()
     file_cache = {}
 end
 
+---Whether a line is boilerplate that should not surface as a change:
+---an import block entry, or a Go build tag.
+---@param cache FileCache
+---@param line number
+---@return boolean
+local function compute_ignored_at_line(cache, line)
+    -- Pre-computed lookups (O(1))
+    if cache.build_tag_lines[line] or cache.import_lines[line] then
+        return true
+    end
+
+    local buffer_number = cache.buffer_number
+    local filetype = cache.filetype
+    local root = cache.root
+    if not root then
+        return false
+    end
+
+    local function is_go_build_tag_comment(n)
+        if not n or filetype ~= "go" then
+            return false
+        end
+        if n:type() ~= "comment" then
+            return false
+        end
+        local text = vim.treesitter.get_node_text(n, buffer_number) or ""
+        return text:match("^//%s*go:build%s+.+") ~= nil
+            or text:match("^//%s*%+build%s+.+") ~= nil
+    end
+
+    local function is_ignored_context_node(n)
+        if not n then
+            return false
+        end
+        local types = M.ignored_context_node_types_by_filetype[filetype]
+        if not types then
+            return false
+        end
+        local t = n:type()
+        for _, ignored_type in ipairs(types) do
+            if t == ignored_type then
+                return true
+            end
+        end
+        return false
+    end
+
+    local row = math.max(0, line - 1)
+    local check = root:named_descendant_for_range(row, 0, row, 0)
+    while check do
+        if is_ignored_context_node(check) or is_go_build_tag_comment(check) then
+            return true
+        end
+        check = check:parent()
+    end
+
+    return false
+end
+
+---@param cache FileCache
+---@param line number
+---@return boolean
+local function is_ignored_line_cached(cache, line)
+    local cached = cache.ignored_cache[line]
+    if cached == nil then
+        cached = compute_ignored_at_line(cache, line)
+        cache.ignored_cache[line] = cached
+    end
+    return cached
+end
+
+---Whether every line of a range is ignorable boilerplate. Used to keep a hunk
+---that starts in the import block but spills into real code.
+---@param cache FileCache
+---@param start_line number
+---@param count number
+---@return boolean
+function M.is_ignored_range(cache, start_line, count)
+    if not cache then
+        return false
+    end
+
+    local last_line = start_line + math.max(count, 1) - 1
+    for line = start_line, last_line do
+        if not is_ignored_line_cached(cache, line) then
+            return false
+        end
+    end
+
+    return true
+end
+
 ---Compute scope at a line using cached file state
 ---@param cache FileCache
 ---@param line number
@@ -227,69 +412,19 @@ end
 ---@return ScopeInfo?, boolean
 local function compute_scope_at_line_cached(cache, line, check_ignored)
     local buffer_number = cache.buffer_number
-    local filetype = cache.filetype
     local root = cache.root
     local scope_node_types = cache.scope_node_types
 
     if not root then
-        return nil, false
+        return nil,
+            check_ignored and is_ignored_line_cached(cache, line) or false
     end
 
     local row = math.max(0, line - 1)
     local node = root:named_descendant_for_range(row, 0, row, 0)
 
-    local ignored = false
-
-    if check_ignored then
-        -- Use pre-computed build tag lines (O(1) lookup)
-        if cache.build_tag_lines[line] then
-            ignored = true
-        end
-
-        if not ignored then
-            local function is_go_build_tag_comment(n)
-                if not n or filetype ~= "go" then
-                    return false
-                end
-                if n:type() ~= "comment" then
-                    return false
-                end
-                local text = vim.treesitter.get_node_text(n, buffer_number)
-                    or ""
-                return text:match("^//%s*go:build%s+.+") ~= nil
-                    or text:match("^//%s*%+build%s+.+") ~= nil
-            end
-
-            local function is_ignored_context_node(n)
-                if not n then
-                    return false
-                end
-                local types = M.ignored_context_node_types_by_filetype[filetype]
-                if not types then
-                    return false
-                end
-                local t = n:type()
-                for _, ignored_type in ipairs(types) do
-                    if t == ignored_type then
-                        return true
-                    end
-                end
-                return false
-            end
-
-            local check = node
-            while check do
-                if
-                    is_ignored_context_node(check)
-                    or is_go_build_tag_comment(check)
-                then
-                    ignored = true
-                    break
-                end
-                check = check:parent()
-            end
-        end
-    end
+    local ignored = check_ignored and is_ignored_line_cached(cache, line)
+        or false
 
     -- Helper: find scope in siblings (for comment nodes)
     local function find_scope_in_siblings(start_node)
@@ -546,98 +681,8 @@ function M.get_scope_at_line(filepath, line, options)
     local ignored = false
 
     if check_ignored then
-        local function is_go_build_tag_comment(n)
-            if not n or filetype ~= "go" then
-                return false
-            end
-
-            if n:type() ~= "comment" then
-                return false
-            end
-
-            local text = vim.treesitter.get_node_text(n, buffer_number) or ""
-            return text:match("^//%s*go:build%s+.+") ~= nil
-                or text:match("^//%s*%+build%s+.+") ~= nil
-        end
-
-        local function is_go_build_tag_blank_line(row0)
-            if filetype ~= "go" or row0 < 0 then
-                return false
-            end
-
-            local cur = vim.api.nvim_buf_get_lines(
-                buffer_number,
-                row0,
-                row0 + 1,
-                false
-            )[1] or ""
-            if not cur:match("^%s*$") then
-                return false
-            end
-
-            local max_lookback = 5
-            for i = 1, max_lookback do
-                local r = row0 - i
-                if r < 0 then
-                    break
-                end
-
-                local prev = vim.api.nvim_buf_get_lines(
-                    buffer_number,
-                    r,
-                    r + 1,
-                    false
-                )[1] or ""
-                if not prev:match("^%s*$") then
-                    if
-                        prev:match("^//%s*go:build%s+.+")
-                        or prev:match("^//%s*%+build%s+.+")
-                    then
-                        return true
-                    end
-
-                    return false
-                end
-            end
-
-            return false
-        end
-
-        local function is_ignored_context_node(n)
-            if not n then
-                return false
-            end
-
-            local types = M.ignored_context_node_types_by_filetype[filetype]
-            if not types then
-                return false
-            end
-
-            local t = n:type()
-            for _, ignored_type in ipairs(types) do
-                if t == ignored_type then
-                    return true
-                end
-            end
-
-            return false
-        end
-
-        local check = node
-        while check do
-            if
-                is_ignored_context_node(check)
-                or is_go_build_tag_comment(check)
-            then
-                ignored = true
-                break
-            end
-            check = check:parent()
-        end
-
-        if not ignored and is_go_build_tag_blank_line(row) then
-            ignored = true
-        end
+        local cache = get_or_create_file_cache(absolute_path)
+        ignored = cache ~= nil and is_ignored_line_cached(cache, line)
     end
 
     -- If on a comment node, look forward through siblings to find the nearest scope

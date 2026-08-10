@@ -192,6 +192,16 @@ local function process_hunks_and_show_picker(options, base, hunks)
             local scope = result and result.scope or nil
             local ignored = result and result.ignored or false
 
+            -- A hunk that starts in the import block but spills into real code
+            -- still matters, so require the whole range to be ignorable.
+            if ignored and hunk.count > 1 then
+                ignored = picker_context.is_ignored_range(
+                    file_cache,
+                    hunk.line,
+                    hunk.count
+                )
+            end
+
             if is_new_file_hunk or not ignored then
                 local key = scope and scope.name
                     or ("line:" .. tostring(hunk.line))
