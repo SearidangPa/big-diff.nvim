@@ -500,9 +500,9 @@ local function compute_scope_at_line_cached(cache, line, check_ignored)
         end
     end
 
-    -- Delegate to beaver for the walk-up-tree logic
-    local beaver = require("beaver")
-    local func_ctx = beaver.enclosing_function(buffer_number, row)
+    -- Delegate to find_enclosing_func for the walk-up-tree logic
+    local find_enclosing_func = require("lib.find_enclosing_func")
+    local func_ctx = find_enclosing_func.enclosing_function(buffer_number, row)
     if func_ctx then
         local sig_line = vim.api.nvim_buf_get_lines(
             buffer_number,
@@ -762,9 +762,9 @@ function M.get_scope_at_line(filepath, line, options)
         end
     end
 
-    -- Delegate to beaver for the walk-up-tree logic
-    local beaver = require("beaver")
-    local func_ctx = beaver.enclosing_function(buffer_number, row)
+    -- Delegate to find_enclosing_func for the walk-up-tree logic
+    local find_enclosing_func = require("lib.find_enclosing_func")
+    local func_ctx = find_enclosing_func.enclosing_function(buffer_number, row)
     if func_ctx then
         local sig_line = vim.api.nvim_buf_get_lines(
             buffer_number,
