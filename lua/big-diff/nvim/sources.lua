@@ -266,11 +266,14 @@ M.gen_source.git = function(opts)
     git_apply_patch(path_data, patch)
   end
 
-  return { name = 'git', attach = attach, detach = detach, apply_hunks = apply_hunks }
+  local review_target = opts.ref ~= nil
+      and { kind = 'git-ref', ref = type(opts.ref) == 'string' and opts.ref or 'custom-ref' }
+    or { kind = 'git-index', ref = 'index' }
+  return { name = 'git', attach = attach, detach = detach, apply_hunks = apply_hunks, review_target = review_target }
 end
 
 M.gen_source.none = function()
-  return { name = 'none', attach = function() end }
+  return { name = 'none', attach = function() end, review_target = { kind = 'none', ref = 'none' } }
 end
 
 M.gen_source.save = function()
@@ -292,7 +295,7 @@ M.gen_source.save = function()
 
   local detach = function(buf_id) pcall(vim.api.nvim_del_augroup_by_id, augroups[buf_id]) end
 
-  return { name = 'save', attach = attach, detach = detach }
+  return { name = 'save', attach = attach, detach = detach, review_target = { kind = 'saved-file', ref = 'saved file' } }
 end
 
 return M

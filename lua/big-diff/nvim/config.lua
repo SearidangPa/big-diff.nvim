@@ -44,6 +44,19 @@ M.default_config = {
     goto_last = ']H',
   },
 
+  -- Native code review options (used by Pi-launched review mode)
+  review = {
+    enabled = true,
+    persist = true,
+    require_saved = true,
+    context_lines = 3,
+    sign = 'R',
+    mappings = { add = '<leader>ar', list = '<leader>aR', submit = '<leader>as' },
+    open = nil,
+    message_prefix = '',
+    message_suffix = '',
+  },
+
   -- Various options
   options = {
     -- Diff algorithm. See `:h vim.text.diff()`
@@ -89,6 +102,20 @@ M.setup_config = function(config)
   H.check_type('mappings.goto_next', config.mappings.goto_next, 'string')
   H.check_type('mappings.goto_last', config.mappings.goto_last, 'string')
 
+  H.check_type('review', config.review, 'table')
+  H.check_type('review.enabled', config.review.enabled, 'boolean')
+  H.check_type('review.persist', config.review.persist, 'boolean')
+  H.check_type('review.require_saved', config.review.require_saved, 'boolean')
+  H.check_type('review.context_lines', config.review.context_lines, 'number')
+  H.check_type('review.sign', config.review.sign, 'string')
+  H.check_type('review.mappings', config.review.mappings, 'table')
+  H.check_type('review.mappings.add', config.review.mappings.add, 'string')
+  H.check_type('review.mappings.list', config.review.mappings.list, 'string')
+  H.check_type('review.mappings.submit', config.review.mappings.submit, 'string')
+  H.check_type('review.open', config.review.open, 'function', true)
+  H.check_type('review.message_prefix', config.review.message_prefix, 'string')
+  H.check_type('review.message_suffix', config.review.message_suffix, 'string')
+
   H.check_type('options', config.options, 'table')
   H.check_type('options.algorithm', config.options.algorithm, 'string')
   H.check_type('options.indent_heuristic', config.options.indent_heuristic, 'boolean')
@@ -123,6 +150,7 @@ M.normalize_source = function(source)
   for i, s in ipairs(source) do
     local cur_s = { attach = s.attach }
     cur_s.name = s.name or 'unknown'
+    cur_s.review_target = vim.deepcopy(s.review_target)
     cur_s.detach = s.detach or function(_) end
     cur_s.apply_hunks = s.apply_hunks or function(_) H.error('Current source does not support applying hunks.') end
 

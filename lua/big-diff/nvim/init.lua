@@ -196,6 +196,11 @@ MiniDiff.setup = function(config)
 
   -- Create default highlighting
   H.viz.create_default_hl()
+
+  -- Review commands are always available, but review mode itself is only
+  -- activated by the Pi handoff entrypoint.
+  MiniDiff.review = require('big-diff.nvim.review')
+  MiniDiff.review.setup(config.review)
 end
 
 MiniDiff.enable = function(buf_id)
@@ -395,12 +400,15 @@ MiniDiff.get_buf_data = function(buf_id)
   buf_id = H.val.validate_buf_id(buf_id)
   local buf_cache = H.state.cache[buf_id]
   if buf_cache == nil then return nil end
+  local active_source = buf_cache.source[buf_cache.source_id] or {}
   return vim.deepcopy({
     config = buf_cache.config,
     hunks = buf_cache.hunks,
     overlay = buf_cache.overlay,
     ref_text = buf_cache.ref_text,
     summary = buf_cache.summary,
+    source_name = active_source.name,
+    source_target = active_source.review_target,
   })
 end
 

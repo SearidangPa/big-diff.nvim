@@ -5,7 +5,7 @@
 Use one supported entry point:
 
 ```text
-/review-in-nvim
+/nvim-review
 ```
 
 A companion Pi extension registers that command. The command suspends Pi's TUI, launches a normal interactive Neovim process in the repository, and waits. Neovim collects review comments and returns one structured review batch when the user submits and exits. Pi then resumes its TUI and sends the batch to the current session with `pi.sendUserMessage()`.
@@ -25,7 +25,7 @@ The feature should not embed Plannotator's React application. It should borrow t
 
 ```mermaid
 flowchart LR
-  C["Pi /review-in-nvim"] --> S["Suspend Pi TUI"]
+  C["Pi /nvim-review"] --> S["Suspend Pi TUI"]
   S --> N["Normal Neovim instance"]
   N --> R["Write review result and exit"]
   R --> P["Resume Pi TUI"]
@@ -36,7 +36,7 @@ flowchart LR
 The Pi extension must register the command with:
 
 ```ts
-pi.registerCommand("review-in-nvim", {
+pi.registerCommand("nvim-review", {
   description: "Review the current repository in Neovim",
   handler: async (_args, ctx) => {
     // Create handoff, suspend TUI, launch Neovim, consume result.
@@ -128,7 +128,7 @@ No Pi registry or socket is needed. The handoff exists only for the lifetime of 
 From Pi:
 
 ```text
-/review-in-nvim
+/nvim-review
 ```
 
 Neovim opens in the repository with the user's normal configuration. Review mode initially shows a changed-file picker or dashboard. Selecting a file opens a real file buffer with `big-diff.nvim` hunks visible.
@@ -317,7 +317,7 @@ After Neovim exits, the Pi extension:
 
 An edited submitted review increments its revision and returns to `pending` on the next review launch.
 
-There is no cross-session routing ambiguity because only the extension instance handling `/review-in-nvim` can consume the result.
+There is no cross-session routing ambiguity because only the extension instance handling `/nvim-review` can consume the result.
 
 ## Message sent to Pi
 
@@ -460,7 +460,7 @@ User BigDiffReviewDeliveryFailed
 
 The first release supports:
 
-- launch only through Pi's `/review-in-nvim` command;
+- launch only through Pi's `/nvim-review` command;
 - a normal Neovim environment with the user's LSP and editor configuration;
 - Git index versus current saved working-tree files;
 - custom reference sources after source metadata exposes the exact target;
@@ -486,7 +486,7 @@ Initial non-goals:
 ### Phase 1: Pi launch and handoff
 
 1. Add the Pi package manifest and companion extension.
-2. Register `/review-in-nvim`.
+2. Register `/nvim-review`.
 3. Resolve the canonical repository and plugin roots.
 4. Create the private request/result handoff.
 5. Suspend and reliably restore Pi's TUI.
@@ -557,7 +557,7 @@ Run Pi's command against a temporary Git repository and a test Neovim configurat
 
 The feature is ready when:
 
-- `/review-in-nvim` launches a full interactive Neovim in the same terminal.
+- `/nvim-review` launches a full interactive Neovim in the same terminal.
 - The user's normal Neovim configuration, filetype behavior, and LSP continue to work.
 - Pi's TUI always resumes after Neovim exits or fails.
 - A user can browse changed files and add comments without leaving Neovim.
@@ -571,3 +571,56 @@ The feature is ready when:
 ## Recommendation
 
 Implement the Pi-launched flow only. It is simpler and safer than discovering an already-running Pi session, guarantees correct session ownership, and still gives Neovim a complete native environment—including the user's LSP—because Pi launches a normal Neovim process rather than a reduced or embedded editor.
+
+## End-to-end testing with tmux
+
+Use a dedicated tmux session as the end-to-end harness. tmux provides a real interactive PTY while allowing the test to start Pi detached, send keystrokes, capture terminal output, and cleanly tear down the process tree. This tests the actual terminal handoff rather than a mocked `spawn()` call.
+
+The test must run Pi in its normal interactive mode, not print, JSON, or RPC mode. It should start Pi in the same tmux pane that Neovim will later inherit. The extension must stop Pi's TUI, launch Neovim with inherited stdio, wait for Neovim to exit, and restart Pi's TUI in that same pane. Do not launch Neovim in a separate tmux pane or window; that would not test the intended terminal ownership model.
+
+Use an isolated tmux socket and configuration so the test does not modify or depend on the user's tmux server:
+
+```sh
+cat > "$tmp/tmux.conf" <<'EOF'
+set -g extended-keys on
+set -g extended-keys-format csi-u
+EOF
+
+tmux -L "$socket" -f "$tmp/tmux.conf" \
+  new-session -d \
+  -s review-e2e \
+  -x 140 -y 45 \
+  -c "$fixture_repo" \
+  pi --no-session
+```
+
+The fixture should contain:
+
+- a temporary Git repository with a committed file and deterministic working-tree changes;
+- a temporary normal Neovim configuration selected through `XDG_CONFIG_HOME` or `NVIM_APPNAME`;
+- a fake LSP server or test LSP configuration that writes a marker from `LspAttach`;
+- the installed Pi package or explicitly loaded extension under test;
+- a deterministic Pi model/provider, or a session file that can be inspected without requiring a network model.
+
+Drive the review through the real UI with `tmux send-keys`. Wait for visible readiness or handoff files between steps rather than using fixed sleeps. A successful case should:
+
+1. start Pi in the fixture repository;
+2. submit `/nvim-review`;
+3. verify that Neovim loaded the test configuration and opened a real listed file buffer;
+4. verify that the LSP attachment marker was written;
+5. add two comments through the review commands or mappings;
+6. submit the batch;
+7. verify that Neovim exited and Pi's TUI was restored;
+8. inspect the result and Pi session data.
+
+Assertions must cover both terminal state and durable artifacts:
+
+- exactly one combined user message reaches the launching Pi session;
+- the message contains the correct repository-relative paths, sides, ranges, excerpts, and comments;
+- only the acknowledged review IDs and revisions become `submitted`;
+- the handoff directory is removed after acceptance or cancellation;
+- cancellation writes no result and sends no user message;
+- the normal Neovim configuration, filetype behavior, environment, and LSP path were exercised;
+- Pi's TUI is restored after successful submission, cancellation, spawn failure, invalid results, and Neovim termination by signal.
+
+Use `tmux capture-pane -p -J` for diagnostic output, but do not make screen scraping the only assertion. Validate result JSON, review persistence, session JSONL, and test marker files directly. Keep handoff protocol, token, UTF-8, size, duplicate-delivery, and stale-anchor cases in focused Lua or Pi extension tests; tmux should cover the cross-process interactive behavior.

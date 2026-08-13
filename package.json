@@ -1,0 +1,13 @@
+{
+  "name": "big-diff.nvim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package", "neovim", "code-review"],
+  "pi": {
+    "extensions": ["./pi/extensions/big-diff-review.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
