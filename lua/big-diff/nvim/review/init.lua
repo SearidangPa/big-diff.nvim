@@ -192,7 +192,8 @@ M.revalidate = function()
         sync_extmark(review, buf_id)
         data = _G.MiniDiff and _G.MiniDiff.get_buf_data(buf_id)
       elseif review.side == 'old' then
-        local ref_text = vim.fn.system({ 'git', '-C', session.repo_root, 'show', ':0:' .. review.file_path })
+        local ref = review.source_target or session.target_ref
+        local ref_text = vim.fn.system({ 'git', '-C', session.repo_root, 'show', ref .. ':' .. review.file_path })
         if vim.v.shell_error == 0 then data = { ref_text = ref_text } end
       end
       local ok, result = pcall(anchor.revalidate, review, buf_id, data)
@@ -269,7 +270,9 @@ M.submit = function()
   local target = pending[1].source_target or 'index'
   local same_target = true
   for _, review in ipairs(pending) do if review.source_target ~= target then same_target = false; break end end
-  session.target_description = same_target and (target == 'index' and 'working tree compared with Git index' or ('working tree compared with ' .. target))
+  session.target_description = same_target
+      and (target == session.target_ref and session.request.targetDescription
+        or (target == 'index' and 'working tree compared with Git index' or ('working tree compared with ' .. target)))
     or 'multiple configured diff targets'
   local markdown = session.config.message_prefix .. format.markdown(session, pending) .. session.config.message_suffix
   if #markdown > 900 * 1024 then notify('Review message is too large to submit', vim.log.levels.ERROR); return end
@@ -301,7 +304,9 @@ M.cancel = function()
 end
 
 local function changed_files()
-  local output = vim.fn.systemlist({ 'git', '-C', session.repo_root, 'diff', '--name-status', '--no-renames' })
+  local output = vim.fn.systemlist({
+    'git', '-C', session.repo_root, 'diff', '--name-status', '--no-renames', session.target_ref, '--',
+  })
   if vim.v.shell_error ~= 0 then return {} end
   local files = {}
   for _, line in ipairs(output) do
@@ -317,7 +322,7 @@ local function dashboard()
   vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].bufhidden = 'wipe'
   vim.bo[buf].filetype = 'big-diff-review-dashboard'
-  local lines, row_map = { 'Changed files (working tree compared with Git index)', '' }, {}
+  local lines, row_map = { 'Changed files (' .. session.target_description .. ')', '' }, {}
   if #files == 0 then lines[#lines + 1] = 'No changed files.' end
   for _, file in ipairs(files) do
     lines[#lines + 1] = string.format('[%s] %s', file.status, file.path)
@@ -370,8 +375,11 @@ M.start = function(opts)
   local state, state_path = persistence.load(request.repoRoot, request.reviewStatePath)
   session = {
     request = request, repo_root = request.repoRoot, state = state, state_path = state_path, config = M.config,
-    target_description = 'working tree compared with Git index',
+    target_ref = request.targetRef, target_description = request.targetDescription,
   }
+  -- A Pi-launched review intentionally overrides only the diff source target;
+  -- the rest of the user's big-diff configuration remains in effect.
+  _G.MiniDiff.config.source = { _G.MiniDiff.gen_source.git({ ref = session.target_ref }) }
   if state.delivery_unknown then
     notify('A previous review delivery is unknown. Inspect the Pi transcript before resubmitting.', vim.log.levels.ERROR)
     emit('BigDiffReviewDeliveryFailed')
@@ -395,7 +403,15 @@ M.start = function(opts)
     end)
   end })
   for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do render_markers(buf_id) end
-  if type(M.config.open) == 'function' then M.config.open() else dashboard() end
+  if type(M.config.open) == 'function' then
+    M.config.open({
+      target_ref = session.target_ref,
+      target_description = session.target_description,
+      repo_root = session.repo_root,
+    })
+  else
+    dashboard()
+  end
 end
 
 create_commands()

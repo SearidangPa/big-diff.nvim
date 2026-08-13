@@ -25,6 +25,8 @@ interface Request {
 	pluginRoot: string;
 	resultPath: string;
 	reviewStatePath: string;
+	targetRef: string;
+	targetDescription: string;
 	startedAt: number;
 }
 
@@ -68,6 +70,25 @@ function nvimStatePath(repoRoot: string): string {
 async function repositoryRoot(cwd: string): Promise<string> {
 	const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" });
 	return realpath(stdout.trim());
+}
+
+function parseTargetRef(args: string): string {
+	const target = args.trim() || "HEAD";
+	if (target.startsWith("-") || target.length > 200 || /[\s\0-\x1f\x7f]/.test(target)) {
+		throw new Error("Expected a single Git branch or revision, for example /nvim-review main");
+	}
+	return target;
+}
+
+async function verifyTargetRef(repoRoot: string, target: string): Promise<void> {
+	try {
+		await execFileAsync("git", ["rev-parse", "--verify", "--quiet", "--end-of-options", `${target}^{commit}`], {
+			cwd: repoRoot,
+			encoding: "utf8",
+		});
+	} catch {
+		throw new Error(`Git branch or revision does not exist: ${target}`);
+	}
 }
 
 function escapeRuntimePath(path: string): string {
@@ -153,8 +174,8 @@ function launchNeovim(executable: string, args: string[], cwd: string, env: Node
 
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("nvim-review", {
-		description: "Review the current repository in Neovim",
-		handler: async (_args, ctx) => {
+		description: "Review changes against a Git ref in Neovim (default: all uncommitted changes)",
+		handler: async (args, ctx) => {
 			if (ctx.mode !== "tui") {
 				const message = "/nvim-review requires an interactive TUI terminal";
 				ctx.ui.notify(message, "error");
@@ -167,6 +188,18 @@ export default function (pi: ExtensionAPI) {
 			let repoRoot: string;
 			try { repoRoot = await repositoryRoot(ctx.cwd); }
 			catch { ctx.ui.notify("The current directory is not inside a Git repository", "error"); return; }
+
+			let targetRef: string;
+			try {
+				targetRef = parseTargetRef(args);
+				await verifyTargetRef(repoRoot, targetRef);
+			} catch (error) {
+				ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+				return;
+			}
+			const targetDescription = targetRef === "HEAD"
+				? "uncommitted changes (staged and unstaged) compared with HEAD"
+				: `working tree compared with ${targetRef}`;
 
 			const pluginRoot = await realpath(resolve(dirname(fileURLToPath(import.meta.url)), "../.."));
 			const reviewStatePath = nvimStatePath(repoRoot);
@@ -184,6 +217,8 @@ export default function (pi: ExtensionAPI) {
 				pluginRoot,
 				resultPath,
 				reviewStatePath,
+				targetRef,
+				targetDescription,
 				startedAt: Date.now(),
 			};
 

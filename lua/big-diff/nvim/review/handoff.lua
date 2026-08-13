@@ -29,6 +29,14 @@ M.read = function(path)
   local handoff_dir = normalize(vim.fn.fnamemodify(path, ':h'))
   if normalize(request.resultPath or '') ~= normalize(vim.fs.joinpath(handoff_dir, 'result.json')) then fail('result path escapes handoff') end
   if type(request.pluginRoot) ~= 'string' or not uv.fs_realpath(request.pluginRoot) then fail('plugin root does not exist') end
+  if type(request.targetRef) ~= 'string' or request.targetRef == '' or request.targetRef:sub(1, 1) == '-'
+      or #request.targetRef > 200 or request.targetRef:find('[%c%s]') then
+    fail('invalid review target')
+  end
+  if type(request.targetDescription) ~= 'string' or request.targetDescription == '' or #request.targetDescription > 300
+      or request.targetDescription:find('%c') then
+    fail('invalid review target description')
+  end
   local expected_state = normalize(persistence.path_for_repo(repo_real))
   if normalize(request.reviewStatePath or '') ~= expected_state then fail('review state path does not match repository') end
   return request

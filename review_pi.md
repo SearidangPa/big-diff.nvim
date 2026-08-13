@@ -5,8 +5,10 @@
 Use one supported entry point:
 
 ```text
-/nvim-review
+/nvim-review [git-ref]
 ```
+
+With no argument, the review compares the working tree with `HEAD`, so staged and unstaged changes are reviewed together. Passing a ref compares against that branch or revision; for example, `/nvim-review main` diffs against `main`.
 
 A companion Pi extension registers that command. The command suspends Pi's TUI, launches a normal interactive Neovim process in the repository, and waits. Neovim collects review comments and returns one structured review batch when the user submits and exits. Pi then resumes its TUI and sends the batch to the current session with `pi.sendUserMessage()`.
 
@@ -37,8 +39,8 @@ The Pi extension must register the command with:
 
 ```ts
 pi.registerCommand("nvim-review", {
-  description: "Review the current repository in Neovim",
-  handler: async (_args, ctx) => {
+  description: "Review changes against a Git ref in Neovim (default: all uncommitted changes)",
+  handler: async (args, ctx) => {
     // Create handoff, suspend TUI, launch Neovim, consume result.
   },
 });
@@ -72,7 +74,7 @@ spawn(nvimExecutable, [
 
 The plugin should define `BigDiffReviewStart` from a small `plugin/` entrypoint or another startup-safe loader. The command reads the private handoff file, initializes the review module, and opens the changed-file or review dashboard.
 
-If the user's configuration already initializes `big-diff.nvim`, review startup must reuse that configuration. It must not call `setup()` a second time or replace the user's mappings and source settings. If the plugin has not been initialized, the review loader may initialize it with defaults plus review-mode settings.
+If the user's configuration already initializes `big-diff.nvim`, review startup must reuse that configuration. It must not call `setup()` a second time or replace the user's mappings. It overrides the diff source only for the requested review target. If the plugin has not been initialized, the review loader may initialize it with defaults plus review-mode settings.
 
 ### Preserve the user's Neovim environment and LSP
 
@@ -113,6 +115,9 @@ Before launching Neovim, the extension creates a private temporary directory wit
   "piSessionFile": "...",
   "pluginRoot": "/path/to/big-diff.nvim",
   "resultPath": "/private/tmp/.../result.json",
+  "reviewStatePath": "/home/user/.local/state/nvim/big-diff/reviews/sha256.json",
+  "targetRef": "HEAD",
+  "targetDescription": "uncommitted changes (staged and unstaged) compared with HEAD",
   "startedAt": 1770000000000
 }
 ```
@@ -128,7 +133,8 @@ No Pi registry or socket is needed. The handoff exists only for the lifetime of 
 From Pi:
 
 ```text
-/nvim-review
+/nvim-review       # staged and unstaged changes compared with HEAD
+/nvim-review main  # working tree compared with main
 ```
 
 Neovim opens in the repository with the user's normal configuration. Review mode initially shows a changed-file picker or dashboard. Selecting a file opens a real file buffer with `big-diff.nvim` hunks visible.
@@ -163,7 +169,7 @@ The command opens a centered floating scratch buffer:
 
 ```text
 Review: lua/big-diff/nvim/init.lua:214-221 [new]
-Target: working tree compared with Git index
+Target: uncommitted changes (staged and unstaged) compared with HEAD
 
 Write the review here...
 ```
@@ -327,7 +333,7 @@ The formatter produces concise Markdown with repository-relative paths and exact
 # Code Review Feedback
 
 Repository: `/path/to/repository`
-Review target: working tree compared with Git index
+Review target: uncommitted changes (staged and unstaged) compared with HEAD
 Submission: `0194...`
 <!-- big-diff-request-id:0194... -->
 
@@ -462,7 +468,8 @@ The first release supports:
 
 - launch only through Pi's `/nvim-review` command;
 - a normal Neovim environment with the user's LSP and editor configuration;
-- Git index versus current saved working-tree files;
+- current saved working-tree files versus `HEAD` by default, including staged and unstaged changes;
+- an optional branch or revision argument such as `/nvim-review main`;
 - custom reference sources after source metadata exposes the exact target;
 - a changed-file picker;
 - comments on changed lines and hunks;
