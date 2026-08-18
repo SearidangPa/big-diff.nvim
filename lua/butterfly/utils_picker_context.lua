@@ -887,7 +887,9 @@ function M.format_item(item, options)
 
     if show_filename then
         local truncate = require("butterfly.util_truncate").truncate_middle
-        local filename = truncate(vim.fn.fnamemodify(item.file, ":t"))
+        local filename = truncate(vim.fn.fnamemodify(item.file, ":t"), {
+            no_truncate_max = #"cb_handler.go",
+        })
         formatted_item[#formatted_item + 1] = { filename, "Comment" }
         formatted_item[#formatted_item + 1] = { ": ", "Comment" }
     end
