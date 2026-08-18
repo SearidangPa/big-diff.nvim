@@ -91,11 +91,14 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
             end
 
             local max_width = math.max(0, width - #prefix)
-            local display = prefix
-                .. truncate.truncate_middle(
+            local display_basename = basename
+            if basename:find("_", 1, true) then
+                display_basename = truncate.truncate_middle(
                     basename,
                     { no_truncate_max = max_width }
                 )
+            end
+            local display = prefix .. display_basename
             table.insert(lines, display)
             line_to_file_index[#lines] = entry.index
             if entry.untracked then
