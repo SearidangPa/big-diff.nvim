@@ -1,8 +1,8 @@
 local M = {}
 
-local picker_context = require("butterfly.utils_picker_context")
-local git_util = require("butterfly.util_git")
-local picker_util = require("butterfly.util_picker")
+local picker_context = require("diffhopper.utils_picker_context")
+local git_util = require("diffhopper.util_git")
+local picker_util = require("diffhopper.util_picker")
 local filesystem = vim.uv or vim.loop
 
 local jump_label_attached = setmetatable({}, { __mode = "k" })
@@ -71,7 +71,7 @@ end
 local function format_item(item, options)
     options = options or {}
     local formatted_item = picker_context.format_item(item, {
-        header_hl_group = "ButterflyFileName",
+        header_hl_group = "DiffHopperFileName",
         show_filename = options.show_filename,
         show_tree = options.show_filename,
     })

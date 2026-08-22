@@ -1,7 +1,7 @@
 local M = {}
-local git = require("butterfly.split_diff.git")
-local ui = require("butterfly.split_diff.ui")
-local git_util = require("butterfly.util_git")
+local git = require("diffhopper.split_diff.git")
+local ui = require("diffhopper.split_diff.ui")
+local git_util = require("diffhopper.util_git")
 
 local state = {
     open_next_file = nil,

@@ -1,5 +1,5 @@
 local M = {}
-local truncate = require("butterfly.util_truncate")
+local truncate = require("diffhopper.util_truncate")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 local current_line_ns =
@@ -44,7 +44,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
     local current_path = nil
     local current_is_diff_path = false
     local ok, diff_path =
-        pcall(vim.api.nvim_buf_get_var, current_buf, "butterfly_diff_path")
+        pcall(vim.api.nvim_buf_get_var, current_buf, "diffhopper_diff_path")
     if ok and diff_path and diff_path ~= "" then
         current_path = diff_path
         current_is_diff_path = true
@@ -78,7 +78,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
             truncate.truncate_middle(group, { no_truncate_max = width })
         table.insert(lines, group_display)
         line_to_file_index[#lines] = false
-        highlights[#lines] = "ButterflyDir"
+        highlights[#lines] = "DiffHopperDir"
 
         local group_entries = groups[group]
         for entry_index, entry in ipairs(group_entries) do
@@ -102,7 +102,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
             table.insert(lines, display)
             line_to_file_index[#lines] = entry.index
             if entry.untracked then
-                highlights[#lines] = "ButterflyUntracked"
+                highlights[#lines] = "DiffHopperUntracked"
             elseif entry.status == "A" then
                 highlights[#lines] = "MiniDiffOverAdd"
             else
@@ -187,7 +187,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
                 highlight_line - 1,
                 0,
                 {
-                    line_hl_group = "ButterflyFileName",
+                    line_hl_group = "DiffHopperFileName",
                 }
             )
         end
@@ -271,7 +271,7 @@ function M.setup_keymaps(
         local ok, diff_path = pcall(
             vim.api.nvim_buf_get_var,
             current_bufnr,
-            "butterfly_diff_path"
+            "diffhopper_diff_path"
         )
         if ok and diff_path and diff_path ~= "" then
             for i, entry in ipairs(files) do
@@ -326,7 +326,7 @@ function M.setup_keymaps(
     end
 
     local sync_group = vim.api.nvim_create_augroup(
-        "ButterflySplitDiffSync" .. buffer_number,
+        "DiffHopperSplitDiffSync" .. buffer_number,
         { clear = true }
     )
     vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "WinEnter" }, {

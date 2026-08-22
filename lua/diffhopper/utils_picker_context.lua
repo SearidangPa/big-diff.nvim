@@ -886,7 +886,7 @@ function M.format_item(item, options)
     end
 
     if show_filename then
-        local truncate = require("butterfly.util_truncate").truncate_middle
+        local truncate = require("diffhopper.util_truncate").truncate_middle
         local filename = truncate(vim.fn.fnamemodify(item.file, ":t"), {
             no_truncate_max = #"cb_handler.go",
         })

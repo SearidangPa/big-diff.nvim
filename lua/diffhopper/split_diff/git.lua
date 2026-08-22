@@ -1,5 +1,5 @@
 local M = {}
-local git_util = require("butterfly.util_git")
+local git_util = require("diffhopper.util_git")
 
 local function prepare_window_for_hunk_folds(win)
     if not vim.api.nvim_win_is_valid(win) then
@@ -67,6 +67,20 @@ local function fold_between_hunks_from_git(hunks, context)
     vim.cmd("silent! %foldclose!")
 end
 
+-- Limit results to the current working directory when it lives inside the
+-- repository, so a diff run from a subdirectory does not list sibling changes.
+---@param git_root string
+---@return string[]
+local function cwd_pathspec(git_root)
+    local cwd = vim.fn.resolve(vim.fn.getcwd())
+    local root = vim.fn.resolve(git_root)
+    if cwd == root or not vim.startswith(cwd .. "/", root .. "/") then
+        return {}
+    end
+
+    return { "--", cwd }
+end
+
 ---@param options? { git_root?: string, buffer_number?: integer }
 function M.get_diff_files(base, callback, options)
     options = options or {}
@@ -78,8 +92,13 @@ function M.get_diff_files(base, callback, options)
         return
     end
 
+    local pathspec = cwd_pathspec(git_root)
+
     vim.system(
-        { "git", "diff", "--name-status", "-z", base },
+        vim.list_extend(
+            { "git", "diff", "--name-status", "-z", base },
+            pathspec
+        ),
         { text = true, cwd = git_root },
         function(obj)
             local entries = {}
@@ -120,7 +139,13 @@ function M.get_diff_files(base, callback, options)
             end
 
             vim.system(
-                { "git", "ls-files", "--others", "--exclude-standard", "-z" },
+                vim.list_extend({
+                    "git",
+                    "ls-files",
+                    "--others",
+                    "--exclude-standard",
+                    "-z",
+                }, pathspec),
                 { text = true, cwd = git_root },
                 function(list_obj)
                     local list_fields = vim.split(list_obj.stdout or "", "\0", {
@@ -165,7 +190,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         vim.api.nvim_set_current_win(main_win)
         local buf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_win_set_buf(main_win, buf)
-        vim.api.nvim_buf_set_name(buf, "butterfly://deleted/" .. file)
+        vim.api.nvim_buf_set_name(buf, "diffhopper://deleted/" .. file)
         vim.bo[buf].buftype = "nofile"
         vim.bo[buf].bufhidden = "wipe"
         vim.bo[buf].swapfile = false
@@ -202,10 +227,10 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
                 vim.bo[buf].readonly = true
                 vim.api.nvim_win_set_cursor(main_win, { 1, 0 })
                 vim.api.nvim_exec_autocmds("BufReadPost", { buffer = buf })
-                vim.b[buf].butterfly_diff_path = file
-                vim.b[buf].butterfly_diff_status = status
+                vim.b[buf].diffhopper_diff_path = file
+                vim.b[buf].diffhopper_diff_status = status
                 vim.wo[main_win].winhl =
-                    "Normal:ButterflyDeleted,NormalNC:ButterflyDeleted"
+                    "Normal:DiffHopperDeleted,NormalNC:DiffHopperDeleted"
                 if on_open then
                     on_open()
                 end
@@ -226,8 +251,8 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             if vim.api.nvim_win_is_valid(main_win) then
                 vim.wo[main_win].winhl = ""
             end
-            vim.b.butterfly_diff_path = file
-            vim.b.butterfly_diff_status = status or "M"
+            vim.b.diffhopper_diff_path = file
+            vim.b.diffhopper_diff_status = status or "M"
 
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
@@ -240,8 +265,8 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             end
             vim.cmd("silent! normal! zE")
             fold_between_hunks_from_git(#fold_hunks > 0 and fold_hunks or hunks)
-            vim.b.butterfly_split_diff_fold_base = base
-            vim.b.butterfly_split_diff_fold_path = file
+            vim.b.diffhopper_split_diff_fold_base = base
+            vim.b.diffhopper_split_diff_fold_path = file
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             pcall(require("big-diff.nvim").enable, 0)
             if on_open then

@@ -1,6 +1,6 @@
-# butterfly.nvim
+# diffhopper.nvim
 
-`butterfly.nvim` is a small set of Neovim tools for moving through code and reviewing changes:
+`diffhopper.nvim` is a small set of Neovim tools for moving through code and reviewing changes:
 
 - jumplist navigation with a picker UI
 - git hunk browsing with a picker UI
@@ -18,20 +18,20 @@ Example with `lazy.nvim`:
 
 ```lua
 {
-  "searidangpa/butterfly.nvim",
+  "searidangpa/diffhopper.nvim",
   dependencies = {
     "folke/snacks.nvim",
     "echasnovski/mini.nvim",
   },
   config = function()
-    require("butterfly").setup()
+    require("diffhopper").setup()
   end,
 }
 ```
 
 ## What `setup()` does
 
-Calling `require("butterfly").setup()`:
+Calling `require("diffhopper").setup()`:
 
 - loads picker modules
 - defines plugin highlight groups
@@ -39,20 +39,20 @@ Calling `require("butterfly").setup()`:
 
 ## Commands
 
-### `:ButterflyDiff`
+### `:DiffHopper`
 
 Toggle split diff mode.
 
 - if split diff is already open, it closes
 - if split diff is closed, it opens a branch picker and compares against the selected branch
 
-### `:ButterflyDiff <base-ref>`
+### `:DiffHopper <base-ref>`
 
 Open split diff directly against a base ref, for example:
 
-- `:ButterflyDiff HEAD`
-- `:ButterflyDiff main`
-- `:ButterflyDiff origin/main`
+- `:DiffHopper HEAD`
+- `:DiffHopper main`
+- `:DiffHopper origin/main`
 
 The ref is passed to git diff logic, so any valid git revision/reference works.
 
@@ -73,17 +73,17 @@ If no changes are found for the chosen base ref, the plugin notifies and exits s
 ### Top-level module
 
 ```lua
-local butterfly = require("butterfly")
+local diffhopper = require("diffhopper")
 
-butterfly.setup()
-butterfly.split_diff_main() -- compare against detected default base branch
-butterfly.split_diff()      -- compare against HEAD
+diffhopper.setup()
+diffhopper.split_diff_main() -- compare against detected default base branch
+diffhopper.split_diff()      -- compare against HEAD
 ```
 
 ### Jumplist picker
 
 ```lua
-local jumplist = require("butterfly.jumplist_fzf")
+local jumplist = require("diffhopper.jumplist_fzf")
 
 jumplist.pick_cwd()    -- jumps from current working directory scope
 jumplist.pick_buffer() -- jumps in current buffer only
@@ -92,7 +92,7 @@ jumplist.pick_buffer() -- jumps in current buffer only
 ### Git diff picker
 
 ```lua
-local diff = require("butterfly.git_diff_fzf")
+local diff = require("diffhopper.git_diff_fzf")
 
 diff.pick_vs_default_branch()
 diff.pick_file_vs_default_branch()
@@ -106,15 +106,15 @@ diff.pick_file_vs_head()
 ## Suggested keymaps
 
 ```lua
-local butterfly = require("butterfly")
-local jumplist = require("butterfly.jumplist_fzf")
-local diff = require("butterfly.git_diff_fzf")
+local diffhopper = require("diffhopper")
+local jumplist = require("diffhopper.jumplist_fzf")
+local diff = require("diffhopper.git_diff_fzf")
 
-vim.keymap.set("n", "<leader>bd", "<cmd>ButterflyDiff<cr>", { desc = "Butterfly split diff" })
-vim.keymap.set("n", "<leader>bj", jumplist.pick_cwd, { desc = "Butterfly jumplist (cwd)" })
-vim.keymap.set("n", "<leader>bJ", jumplist.pick_buffer, { desc = "Butterfly jumplist (buffer)" })
-vim.keymap.set("n", "<leader>bg", diff.pick_vs_default_branch, { desc = "Butterfly git diff" })
-vim.keymap.set("n", "<leader>bf", diff.pick_file_vs_default_branch, { desc = "Butterfly file diff" })
+vim.keymap.set("n", "<leader>bd", "<cmd>DiffHopper<cr>", { desc = "DiffHopper split diff" })
+vim.keymap.set("n", "<leader>bj", jumplist.pick_cwd, { desc = "DiffHopper jumplist (cwd)" })
+vim.keymap.set("n", "<leader>bJ", jumplist.pick_buffer, { desc = "DiffHopper jumplist (buffer)" })
+vim.keymap.set("n", "<leader>bg", diff.pick_vs_default_branch, { desc = "DiffHopper git diff" })
+vim.keymap.set("n", "<leader>bf", diff.pick_file_vs_default_branch, { desc = "DiffHopper file diff" })
 ```
 
 ## Notes

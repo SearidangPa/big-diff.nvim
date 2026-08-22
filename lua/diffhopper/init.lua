@@ -2,8 +2,8 @@ local M = {}
 local DEFAULT_BASE = {}
 
 M.setup = function()
-    require("butterfly.jumplist_fzf")
-    require("butterfly.git_diff_fzf")
+    require("diffhopper.jumplist_fzf")
+    require("diffhopper.git_diff_fzf")
 
     local function set_hl()
         local function hi_overlay(group, options)
@@ -12,10 +12,10 @@ M.setup = function()
 
         local file_name_hl = vim.o.background == "dark" and "#3E8FB0"
             or "#276983"
-        vim.api.nvim_set_hl(0, "ButterflyFileName", { fg = file_name_hl })
+        vim.api.nvim_set_hl(0, "DiffHopperFileName", { fg = file_name_hl })
         local dir_name_hl = vim.o.background == "dark" and "#9CCFD9"
             or "#1EAC85"
-        vim.api.nvim_set_hl(0, "ButterflyDir", { fg = dir_name_hl })
+        vim.api.nvim_set_hl(0, "DiffHopperDir", { fg = dir_name_hl })
 
         local is_dark = vim.o.background == "dark"
         if is_dark then
@@ -25,16 +25,16 @@ M.setup = function()
             hi_overlay("MiniDiffOverContextBuf", { bg = "#1f3326" })
             hi_overlay("MiniDiffOverChange", { bg = "#330011" })
             hi_overlay("MiniDiffOverChangeBuf", { bg = "#2f3d22" })
-            vim.api.nvim_set_hl(0, "ButterflyUntracked", { bg = "#4F4626" })
+            vim.api.nvim_set_hl(0, "DiffHopperUntracked", { bg = "#4F4626" })
         else
             hi_overlay("MiniDiffOverAdd", { bg = "#dafbe1" })
             hi_overlay("MiniDiffOverDelete", { bg = "#FFE0E0" })
-            vim.api.nvim_set_hl(0, "ButterflyUntracked", { bg = "#FEFEF9" })
+            vim.api.nvim_set_hl(0, "DiffHopperUntracked", { bg = "#FEFEF9" })
         end
 
         vim.api.nvim_set_hl(
             0,
-            "ButterflyDeleted",
+            "DiffHopperDeleted",
             { link = "MiniDiffOverDelete" }
         )
     end
@@ -69,7 +69,7 @@ local function handle_open_split_diff(split_diff)
 end
 
 local function toggle_split_diff(target)
-    local split_diff = require("butterfly.split_diff")
+    local split_diff = require("diffhopper.split_diff")
     if handle_open_split_diff(split_diff) then
         return
     end
@@ -88,7 +88,7 @@ local function toggle_split_diff(target)
     end
 
     if target == DEFAULT_BASE then
-        require("butterfly.util_git").get_default_base_branch_async(
+        require("diffhopper.util_git").get_default_base_branch_async(
             function(branch)
                 split_diff.open(branch)
             end
@@ -99,7 +99,7 @@ local function toggle_split_diff(target)
     split_diff.open(target)
 end
 
-vim.api.nvim_create_user_command("ButterflyDiff", function(options)
+vim.api.nvim_create_user_command("DiffHopper", function(options)
     toggle_split_diff(options.args ~= "" and options.args or nil)
 end, { nargs = "?" })
 
