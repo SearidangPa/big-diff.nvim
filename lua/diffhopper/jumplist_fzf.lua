@@ -320,6 +320,7 @@ function M.pick(options)
         current_buffer_number,
         exclude_current
     )
+    local navigation_actions, navigation_keys = picker_util.header_navigation()
 
     Snacks.picker({
         title = "Jumplist (cwd)",
@@ -333,10 +334,10 @@ function M.pick(options)
             keep_parents = true,
             sort = false,
         },
-        actions = label_actions,
+        actions = vim.tbl_extend("error", label_actions, navigation_actions),
         win = {
             input = {
-                keys = label_keys,
+                keys = vim.tbl_extend("error", label_keys, navigation_keys),
             },
         },
         on_show = function(picker)

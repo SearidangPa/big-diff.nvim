@@ -1,5 +1,40 @@
 local M = {}
 
+local function move_past_headers(picker, direction)
+    local list = picker.list
+    local original_cursor = list.cursor
+
+    for _ = 1, list:count() do
+        local previous_cursor = list.cursor
+        list:move(direction)
+        local item = list:current()
+        if not item or not (item.is_header and not item.standalone) then
+            return
+        end
+        if list.cursor == previous_cursor then
+            break
+        end
+    end
+
+    -- At a non-cycling boundary there may be no selectable item in this
+    -- direction. Do not leave the cursor parked on the header.
+    list:view(original_cursor)
+end
+
+function M.header_navigation()
+    return {
+        diffhopper_list_down = function(picker)
+            move_past_headers(picker, 1)
+        end,
+        diffhopper_list_up = function(picker)
+            move_past_headers(picker, -1)
+        end,
+    }, {
+        ["<C-n>"] = { "diffhopper_list_down", mode = { "i", "n" } },
+        ["<C-p>"] = { "diffhopper_list_up", mode = { "i", "n" } },
+    }
+end
+
 function M.regroup_by_parent(picker, matcher, show_headers)
     if not picker or picker.closed then
         return

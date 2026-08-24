@@ -393,8 +393,15 @@ local function process_blocks_and_show_picker(options, base, blocks)
         label_actions, label_keys = build_label_actions()
     end
     local toggle_actions, toggle_keys = build_toggle_actions(options, base)
-    local actions = vim.tbl_extend("error", label_actions, toggle_actions)
-    local keys = vim.tbl_extend("error", label_keys, toggle_keys)
+    local navigation_actions, navigation_keys = picker_util.header_navigation()
+    local actions = vim.tbl_extend(
+        "error",
+        label_actions,
+        toggle_actions,
+        navigation_actions
+    )
+    local keys =
+        vim.tbl_extend("error", label_keys, toggle_keys, navigation_keys)
 
     Snacks.picker({
         title = picker_title(options, base),
