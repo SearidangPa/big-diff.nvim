@@ -221,63 +221,297 @@ function M.get_default_base_branch_async(callback, options)
     end)
 end
 
----@param base? string
----@param this_file? string
----@param callback fun(hunks: table[])
----@param options? { git_root?: string, buffer_number?: integer, ignore_whitespace?: boolean }
-function M.get_diff_hunks(base, this_file, callback, options)
-    base = base or "HEAD"
+---@class DiffHopperHunkItem : DiffHopperHunk
+---@field file string repo relative path
+---@field block DiffHopperBlock
 
-    options = options or {}
-    local git_root = options.git_root or M.find_git_root(options.bufnr)
+local function uv()
+    return vim.uv or vim.loop
+end
 
-    local cmd = { "git" }
+---Reads a file without touching vimscript, so it is safe in a libuv callback.
+---@param path string
+---@param max_bytes number
+---@return string?, boolean too_large
+local function read_file(path, max_bytes)
+    local fd = uv().fs_open(path, "r", 438)
+    if not fd then
+        return nil, false
+    end
+
+    local stat = uv().fs_fstat(fd)
+    if not stat then
+        uv().fs_close(fd)
+        return nil, false
+    end
+
+    if stat.size > max_bytes then
+        uv().fs_close(fd)
+        return nil, true
+    end
+
+    local content = uv().fs_read(fd, stat.size, 0)
+    uv().fs_close(fd)
+    return content, false
+end
+
+---Builds a synthetic `new file` diff for an untracked path.
+---@param git_root string
+---@param file string
+---@param max_bytes number
+---@return DiffHopperBlock?
+local function untracked_block(git_root, file, max_bytes)
+    local diff_parse = require("diffhopper.diff_parse")
+    local content, too_large = read_file(git_root .. "/" .. file, max_bytes)
+
+    local lines = {
+        ("diff --git a/%s b/%s"):format(file, file),
+        "new file mode 100644",
+        "--- /dev/null",
+        ("+++ b/%s"):format(file),
+    }
+
+    if content and not content:find("%z") then
+        local body = vim.split(content, "\n", { plain = true })
+        local trailing_newline = body[#body] == ""
+        if trailing_newline then
+            table.remove(body)
+        end
+
+        if #body > 0 then
+            lines[#lines + 1] = ("@@ -0,0 +1,%d @@"):format(#body)
+            for _, text in ipairs(body) do
+                lines[#lines + 1] = "+" .. text
+            end
+            if not trailing_newline then
+                lines[#lines + 1] = "\\ No newline at end of file"
+            end
+        end
+    elseif content then
+        lines[#lines + 1] = ("Binary files /dev/null and b/%s differ"):format(
+            file
+        )
+    elseif too_large then
+        lines[#lines + 1] = ("Binary files /dev/null and b/%s differ"):format(
+            file
+        )
+    end
+
+    local block = diff_parse.parse(lines).blocks[1]
+    if block then
+        block.untracked = true
+    end
+    return block
+end
+
+---@param git_root? string
+---@param extra string[]
+---@return string[]
+local function git_cmd(git_root, extra)
+    local cmd = { "git", "--no-pager", "-c", "core.quotepath=false" }
     if git_root and git_root ~= "" then
         cmd[#cmd + 1] = "-C"
         cmd[#cmd + 1] = git_root
     end
-    cmd[#cmd + 1] = "diff"
-    if options.ignore_whitespace then
-        cmd[#cmd + 1] = "--ignore-all-space"
+    return vim.list_extend(cmd, extra)
+end
+
+---@param this_file? string
+---@param git_root? string
+---@return string?
+local function pathspec(this_file, git_root)
+    if not this_file or this_file == "" then
+        return nil
     end
-    cmd[#cmd + 1] = base
-    cmd[#cmd + 1] = "--unified=0"
-    if this_file and this_file ~= "" then
-        local diff_file = this_file
-        if git_root and git_root ~= "" and is_absolute_path(this_file) then
-            diff_file = M.to_repo_relative_path(this_file, git_root)
+    if git_root and git_root ~= "" and is_absolute_path(this_file) then
+        return M.to_repo_relative_path(this_file, git_root)
+    end
+    return this_file
+end
+
+---@class DiffHopperDiffOpts
+---@field git_root? string
+---@field buffer_number? integer
+---@field ignore_whitespace? boolean
+---@field context_lines? number unified context, defaults to 0
+---@field merge_base? boolean diff against the merge base of `base` and HEAD
+---@field staged? boolean true: index only, false: worktree only, nil: both
+---@field include_untracked? boolean
+---@field detect_staged? boolean flag blocks whose file has staged changes
+
+---Runs `git diff` and returns every hunk it produced.
+---
+---`hunks[i].line`/`.count` are the raw `@@` values on the new side, while
+---`.change_line`/`.change_count` skip leading context. Each hunk keeps its
+---text in `.diff` and its file metadata in `.block`.
+---@param base? string
+---@param this_file? string
+---@param callback fun(hunks: DiffHopperHunkItem[], blocks: DiffHopperBlock[])
+---@param options? DiffHopperDiffOpts
+function M.get_diff_hunks(base, this_file, callback, options)
+    base = base or "HEAD"
+
+    options = options or {}
+    local git_root = options.git_root or M.find_git_root(options.buffer_number)
+    local diff_parse = require("diffhopper.diff_parse")
+    local file = pathspec(this_file, git_root)
+
+    ---@param use_merge_base boolean
+    ---@return string[]
+    local function build_cmd(use_merge_base)
+        local args = {
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            ("--unified=%d"):format(options.context_lines or 0),
+        }
+        if options.ignore_whitespace then
+            args[#args + 1] = "--ignore-all-space"
         end
-        cmd[#cmd + 1] = "--"
-        cmd[#cmd + 1] = diff_file
+        if options.staged then
+            args[#args + 1] = "--cached"
+        end
+        if base and base ~= "" and options.staged ~= false then
+            if use_merge_base then
+                args[#args + 1] = "--merge-base"
+            end
+            args[#args + 1] = base
+        end
+        if file then
+            args[#args + 1] = "--"
+            args[#args + 1] = file
+        end
+        return git_cmd(git_root, args)
     end
 
-    vim.system(cmd, { text = true }, function(obj)
-        local hunks = {}
-        local output = obj.stdout or ""
-        local current_file = nil
-
-        for line in output:gmatch("[^\n]+") do
-            local file = line:match("^%+%+%+ b/(.+)$")
-            if file then
-                current_file = file
-            elseif current_file then
-                local start_line, count = line:match("^@@ .* %+(%d+),(%d+)")
-                if not start_line then
-                    start_line = line:match("^@@ .* %+(%d+)")
-                    count = 1
-                end
-                if start_line then
-                    table.insert(hunks, {
-                        file = current_file,
-                        line = tonumber(start_line),
-                        count = tonumber(count) or 1,
-                    })
-                end
+    ---Collects untracked paths and the set of files with staged changes, so
+    ---blocks can be flagged without a second diff pass.
+    ---@param finish fun(untracked: string[], staged: table<string, boolean>)
+    local function collect_extras(finish)
+        local untracked = {}
+        local staged = {}
+        local pending = 0
+        local function done()
+            pending = pending - 1
+            if pending == 0 then
+                finish(untracked, staged)
             end
         end
 
-        vim.schedule(function()
-            callback(hunks)
+        local jobs = {}
+
+        if options.include_untracked and not options.staged then
+            local args = { "ls-files", "--others", "--exclude-standard", "-z" }
+            if file then
+                args[#args + 1] = "--"
+                args[#args + 1] = file
+            end
+            jobs[#jobs + 1] = {
+                cmd = git_cmd(git_root, args),
+                handler = function(obj)
+                    for _, path in
+                        ipairs(vim.split(obj.stdout or "", "\0", {
+                            plain = true,
+                            trimempty = true,
+                        }))
+                    do
+                        untracked[#untracked + 1] = path
+                    end
+                end,
+            }
+        end
+
+        if options.staged == nil and options.detect_staged then
+            local args = { "diff", "--cached", "--name-only", "-z" }
+            if file then
+                args[#args + 1] = "--"
+                args[#args + 1] = file
+            end
+            jobs[#jobs + 1] = {
+                cmd = git_cmd(git_root, args),
+                handler = function(obj)
+                    for _, path in
+                        ipairs(vim.split(obj.stdout or "", "\0", {
+                            plain = true,
+                            trimempty = true,
+                        }))
+                    do
+                        staged[path] = true
+                    end
+                end,
+            }
+        end
+
+        if #jobs == 0 then
+            finish(untracked, staged)
+            return
+        end
+
+        pending = #jobs
+        for _, job in ipairs(jobs) do
+            vim.system(job.cmd, { text = true }, function(obj)
+                if obj.code == 0 then
+                    job.handler(obj)
+                end
+                done()
+            end)
+        end
+    end
+
+    ---@param output string
+    local function finish(output)
+        local blocks =
+            diff_parse.parse(vim.split(output, "\n", { plain = true })).blocks
+
+        collect_extras(function(untracked, staged)
+            local max_bytes =
+                require("diffhopper.config").get().git.untracked_max_bytes
+            for _, path in ipairs(untracked) do
+                local block = untracked_block(git_root or ".", path, max_bytes)
+                if block then
+                    blocks[#blocks + 1] = block
+                end
+            end
+
+            for _, block in ipairs(blocks) do
+                if options.staged then
+                    block.staged = true
+                elseif staged[block.file] then
+                    block.staged = true
+                end
+            end
+
+            ---@type DiffHopperHunkItem[]
+            local hunks = {}
+            for _, block in ipairs(blocks) do
+                for _, hunk in ipairs(block.hunks) do
+                    local item = hunk --[[@as DiffHopperHunkItem]]
+                    item.file = block.file
+                    item.block = block
+                    hunks[#hunks + 1] = item
+                end
+            end
+
+            vim.schedule(function()
+                callback(hunks, blocks)
+            end)
+        end)
+    end
+
+    local use_merge_base = options.merge_base == true
+        and base ~= nil
+        and base ~= ""
+        and options.staged ~= false
+    vim.system(build_cmd(use_merge_base), { text = true }, function(obj)
+        if obj.code == 0 or not use_merge_base then
+            finish(obj.stdout or "")
+            return
+        end
+
+        -- `--merge-base` fails for refs with no common ancestor (and on git
+        -- older than 2.30); fall back to a plain two-dot diff.
+        vim.system(build_cmd(false), { text = true }, function(plain)
+            finish(plain.stdout or "")
         end)
     end)
 end

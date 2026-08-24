@@ -1,7 +1,9 @@
 local M = {}
 local DEFAULT_BASE = {}
 
-M.setup = function()
+---@param options? table see `diffhopper.config`
+M.setup = function(user_options)
+    require("diffhopper.config").setup(user_options)
     require("diffhopper.jumplist_fzf")
     require("diffhopper.git_diff_fzf")
 
@@ -37,6 +39,8 @@ M.setup = function()
             "DiffHopperDeleted",
             { link = "MiniDiffOverDelete" }
         )
+
+        pcall(require("diffhopper.diff_render").set_hl)
     end
 
     set_hl()

@@ -386,7 +386,7 @@ end
 
 ---Whether every line of a range is ignorable boilerplate. Used to keep a hunk
 ---that starts in the import block but spills into real code.
----@param cache FileCache
+---@param cache FileCache?
 ---@param start_line number
 ---@param count number
 ---@return boolean
@@ -575,7 +575,7 @@ M.tree_icons = {
 ---@param absolute_path string
 ---@return integer
 function M.load_file_buffer(absolute_path)
-    local buffer_number = vim.fn.buffer_number(absolute_path)
+    local buffer_number = vim.fn.bufnr(absolute_path)
 
     if buffer_number == -1 then
         if not vim.loop.fs_stat(absolute_path) then
@@ -603,7 +603,7 @@ function M.resolve_ft_and_lang(filepath)
     local filetype = vim.filetype.match({ filename = abs })
 
     if not filetype or filetype == "" then
-        local buffer_number = vim.fn.buffer_number(abs)
+        local buffer_number = vim.fn.bufnr(abs)
         if buffer_number ~= -1 then
             filetype = vim.bo[buffer_number].filetype
         end

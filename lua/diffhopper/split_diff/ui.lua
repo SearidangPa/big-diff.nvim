@@ -24,7 +24,7 @@ function M.create_split_buffer()
     vim.wo[window_number].winfixwidth = true
 
     local width = math.floor(vim.o.columns * 0.15)
-    vim.api.nvim_win_set_width(window_number, width)
+    vim.api.nvim_win_resize(window_number, width, -1)
 
     return buffer_number, window_number
 end
