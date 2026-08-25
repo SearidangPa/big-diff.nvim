@@ -1,5 +1,6 @@
 local M = {}
 local DEFAULT_BASE = {}
+local LAST_COMMIT = {}
 
 ---@param options? table see `diffhopper.config`
 M.setup = function(user_options)
@@ -72,6 +73,33 @@ local function handle_open_split_diff(split_diff)
     return true
 end
 
+---Resolves the parent of HEAD so the split diff shows the latest commit.
+---@param split_diff table
+local function open_last_commit(split_diff)
+    local git_root = require("diffhopper.util_git").find_git_root()
+    vim.system({
+        "git",
+        "-C",
+        git_root or ".",
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "HEAD~1",
+    }, { text = true }, function(obj)
+        local sha = vim.trim(obj.stdout or "")
+        vim.schedule(function()
+            if obj.code ~= 0 or sha == "" then
+                vim.notify(
+                    "No previous commit to diff the latest commit against",
+                    vim.log.levels.WARN
+                )
+                return
+            end
+            split_diff.open(sha)
+        end)
+    end)
+end
+
 local function toggle_split_diff(target)
     local split_diff = require("diffhopper.split_diff")
     if handle_open_split_diff(split_diff) then
@@ -88,6 +116,11 @@ local function toggle_split_diff(target)
                 end
             end,
         })
+        return
+    end
+
+    if target == LAST_COMMIT then
+        open_last_commit(split_diff)
         return
     end
 
@@ -113,6 +146,10 @@ end
 
 function M.split_diff()
     toggle_split_diff("HEAD")
+end
+
+function M.split_diff_last_commit()
+    toggle_split_diff(LAST_COMMIT)
 end
 
 ---@class ScopeInfo

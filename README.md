@@ -112,6 +112,7 @@ local diffhopper = require("diffhopper")
 diffhopper.setup()
 diffhopper.split_diff_main() -- compare against detected default base branch
 diffhopper.split_diff()      -- compare against HEAD
+diffhopper.split_diff_last_commit() -- compare against HEAD~1 (the latest commit)
 ```
 
 ### Jumplist picker
@@ -179,6 +180,7 @@ local jumplist = require("diffhopper.jumplist_fzf")
 local diff = require("diffhopper.git_diff_fzf")
 
 vim.keymap.set("n", "<leader>bd", "<cmd>DiffHopper<cr>", { desc = "DiffHopper split diff" })
+vim.keymap.set("n", "<leader>bs", diffhopper.split_diff_last_commit, { desc = "DiffHopper latest commit" })
 vim.keymap.set("n", "<leader>bj", jumplist.pick_cwd, { desc = "DiffHopper jumplist (cwd)" })
 vim.keymap.set("n", "<leader>bJ", jumplist.pick_buffer, { desc = "DiffHopper jumplist (buffer)" })
 vim.keymap.set("n", "<leader>bg", diff.pick_vs_default_branch, { desc = "DiffHopper git diff" })
