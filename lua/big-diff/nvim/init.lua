@@ -145,6 +145,20 @@ MiniDiff.setup = function(config)
     MiniDiff.fold_between_hunks(0, context and { context = context } or nil)
   end, { nargs = '?', desc = 'Fold unchanged regions between hunks' })
 
+  vim.api.nvim_create_user_command('Diff', function(cmd_opts)
+    local count = cmd_opts.args
+    if not count:match('^%d+$') then H.log.error('`count` should be a non-negative integer.') end
+
+    local ok, split_diff = pcall(require, 'diffhopper.split_diff')
+    if not ok then
+      pcall(vim.cmd.packadd, 'diffhopper.nvim')
+      ok, split_diff = pcall(require, 'diffhopper.split_diff')
+    end
+    if not ok then H.log.error('`:Diff` requires diffhopper.nvim.') end
+
+    split_diff.open('HEAD~' .. count)
+  end, { nargs = 1, desc = 'Open a split diff against HEAD~{count}' })
+
   -- Register decoration provider
   H.viz.set_decoration_provider(H.state.ns_id.viz, H.state.ns_id.overlay)
 
