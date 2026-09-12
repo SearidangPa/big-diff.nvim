@@ -146,8 +146,9 @@ MiniDiff.setup = function(config)
   end, { nargs = '?', desc = 'Fold unchanged regions between hunks' })
 
   vim.api.nvim_create_user_command('Diff', function(cmd_opts)
-    local count = cmd_opts.args
-    if not count:match('^%d+$') then H.log.error('`count` should be a non-negative integer.') end
+    local argument = cmd_opts.args
+    local count = argument == 'commit' and '1' or argument
+    if not count:match('^%d+$') then H.log.error('Expected `commit` or a non-negative commit count.') end
 
     local ok, split_diff = pcall(require, 'diffhopper.split_diff')
     if not ok then
@@ -157,7 +158,7 @@ MiniDiff.setup = function(config)
     if not ok then H.log.error('`:Diff` requires diffhopper.nvim.') end
 
     split_diff.open('HEAD~' .. count)
-  end, { nargs = 1, desc = 'Open a split diff against HEAD~{count}' })
+  end, { nargs = 1, desc = 'Open a split diff against a commit (`commit` means HEAD~1)' })
 
   -- Register decoration provider
   H.viz.set_decoration_provider(H.state.ns_id.viz, H.state.ns_id.overlay)
