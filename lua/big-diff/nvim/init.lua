@@ -160,6 +160,10 @@ MiniDiff.setup = function(config)
     split_diff.open('HEAD~' .. count)
   end, { nargs = 1, desc = 'Open a split diff against a commit (`commit` means HEAD~1)' })
 
+  vim.api.nvim_create_user_command('Differ', function(cmd_opts)
+    require('big-diff.nvim.differ').open(cmd_opts.args)
+  end, { nargs = 1, desc = 'Open a checked-out GitHub PR diff against its actual base' })
+
   -- Register decoration provider
   H.viz.set_decoration_provider(H.state.ns_id.viz, H.state.ns_id.overlay)
 
