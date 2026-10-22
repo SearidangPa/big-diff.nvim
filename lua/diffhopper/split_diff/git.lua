@@ -173,6 +173,16 @@ function M.get_diff_files(base, callback, options)
 end
 
 function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
+    -- A PR cache refresh can replace/close the view while these Git reads run.
+    -- Guard file callbacks too, not just the outer changed-files query: an old
+    -- hunk result must not steal the buffer/focus from a newer session.
+    local split = require("diffhopper.split_diff")
+    local session_id = split.get_session_id()
+    local function is_current()
+        return split.get_session_id() == session_id
+            and vim.api.nvim_win_is_valid(main_win)
+    end
+
     local file = entry
     local status = nil
     if type(entry) == "table" then
@@ -218,7 +228,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             end
 
             vim.schedule(function()
-                if not vim.api.nvim_buf_is_valid(buf) then
+                if not is_current() or not vim.api.nvim_buf_is_valid(buf) then
                     return
                 end
                 vim.bo[buf].modifiable = true
@@ -240,7 +250,13 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
     end
 
     git_util.get_diff_hunks(base, file, function(hunks)
+        if not is_current() then
+            return
+        end
         git_util.get_diff_hunks(base, file, function(fold_hunks)
+            if not is_current() then
+                return
+            end
             local hunk_line = (hunks[1] and hunks[1].line) or 1
             vim.api.nvim_set_current_win(main_win)
             vim.cmd(

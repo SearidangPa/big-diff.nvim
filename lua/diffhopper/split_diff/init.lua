@@ -256,6 +256,10 @@ function M.open(base)
             return
         end
 
+        -- Tree creation temporarily selects its window. Restore focus before
+        -- the async hunk reads so a concurrent PR refresh does not mistake our
+        -- own rendering for the user switching away from the main window.
+        vim.api.nvim_set_current_win(state.main_win)
         git.open_file_in_main_win(
             base,
             git_root,
@@ -264,6 +268,12 @@ function M.open(base)
             navigation.sync_current_file
         )
     end, { git_root = state.git_root, buffer_number = main_buf })
+end
+
+-- A generation token for async clients (e.g. big-diff's cached PR lookup).
+-- Opening/closing a view changes it, even when the next view has the same base.
+function M.get_session_id()
+    return state.session_id
 end
 
 function M.is_open()
