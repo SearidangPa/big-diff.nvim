@@ -31,7 +31,7 @@ local function commit(name)
   return git({ 'rev-parse', 'HEAD' })
 end
 
-package.preload['diffhopper.split_diff'] = function()
+package.preload['big-diff.nvim.split'] = function()
   return {
     open = function(base)
       view_session, view_open = view_session + 1, true
@@ -345,7 +345,7 @@ local ok, err = xpcall(function()
     assert(vim.wait(10000, done, 5))
     eq(true, handle.has_view())
     handle.cancel(true)
-    eq(false, require('diffhopper.split_diff').is_open())
+    eq(false, require('big-diff.nvim.split').is_open())
     eq(false, handle.is_current())
   end)
 
@@ -353,7 +353,7 @@ local ok, err = xpcall(function()
     prepare({ have_base = true })
     local handle = differ.open(url)
     assert(vim.wait(10000, done, 5))
-    local split = require('diffhopper.split_diff')
+    local split = require('big-diff.nvim.split')
     split.close()
     eq(false, handle.is_current())
     split.open(merge_base)
@@ -366,7 +366,7 @@ local ok, err = xpcall(function()
     prepare({ have_base = true, delay_gh = true })
     local handle = differ.open(url)
     assert(vim.wait(10000, function() return scenario.delayed ~= nil end, 5))
-    require('diffhopper.split_diff').open('HEAD')
+    require('big-diff.nvim.split').open('HEAD')
     scenario.delayed({ code = 0, stdout = vim.json.encode(pr), stderr = '' })
     vim.wait(50, function() return false end, 5)
     eq({ 'HEAD' }, opened)
@@ -375,28 +375,27 @@ local ok, err = xpcall(function()
 
   test('a corrected request tolerates file navigation in the prior view', function()
     prepare({ have_base = true, delay_gh = true })
-    require('diffhopper.split_diff').open('HEAD')
+    require('big-diff.nvim.split').open('HEAD')
     local handle = differ.open(url)
     assert(vim.wait(10000, function() return scenario.delayed ~= nil end, 5))
     vim.cmd.enew()
-    vim.b.diffhopper_diff_path = 'file.txt'
+    vim.b.big_diff_split_path = 'file.txt'
     scenario.delayed({ code = 0, stdout = vim.json.encode(pr), stderr = '' })
     assert(vim.wait(10000, function() return #opened == 2 end, 5))
     eq({ 'HEAD', merge_base }, opened)
     eq(true, handle.has_view())
   end)
 
-  if vim.env.DIFFHOPPER_RTP then
-    test('renders and closes the real diffhopper file tree and big-diff overlay', function()
+  do
+    test('renders and closes the real split file tree and big-diff overlay', function()
       prepare({ have_base = true })
       local buf = vim.api.nvim_get_current_buf()
       for _, other in ipairs(vim.api.nvim_list_bufs()) do
         if other ~= buf then vim.api.nvim_buf_delete(other, { force = true }) end
       end
-      vim.opt.runtimepath:append(vim.env.DIFFHOPPER_RTP)
-      package.loaded['diffhopper.split_diff'] = nil
-      package.preload['diffhopper.split_diff'] = nil
-      local split = require('diffhopper.split_diff')
+      package.loaded['big-diff.nvim.split'] = nil
+      package.preload['big-diff.nvim.split'] = nil
+      local split = require('big-diff.nvim.split')
       local core = require('big-diff.nvim')
       vim.g.minidiff_disable = false
       vim.g.minidiff_git_base_ref = 'HEAD'
@@ -440,14 +439,14 @@ local ok, err = xpcall(function()
       prepare({ have_base = true })
       vim.cmd.edit(vim.fn.fnameescape(checkout .. '/release.txt'))
       local original_buf = vim.api.nvim_get_current_buf()
-      local split = require('diffhopper.split_diff')
-      local git_util = require('diffhopper.util_git')
+      local split = require('big-diff.nvim.split')
+      local git_util = require('big-diff.nvim.utils_git')
       local get_diff_hunks = git_util.get_diff_hunks
       local callbacks = {}
       git_util.get_diff_hunks = function(_, _, callback) callbacks[#callbacks + 1] = callback end
       split.open(merge_base)
       local on_open_called = false
-      require('diffhopper.split_diff.git').open_file_in_main_win(
+      require('big-diff.nvim.split.git').open_file_in_main_win(
         merge_base,
         checkout,
         { path = 'file.txt', status = 'M' },
@@ -467,7 +466,7 @@ local ok, err = xpcall(function()
     if vim.env.NVIM_CONFIG_RTP then
       vim.opt.runtimepath:append(vim.env.NVIM_CONFIG_RTP)
       local config = require('pack.big_diff')
-      local split = require('diffhopper.split_diff')
+      local split = require('big-diff.nvim.split')
       local core = require('big-diff.nvim')
       for _, outcome in ipairs({ 'same', 'different', 'none', 'closed' }) do
         test('real cache/gh race after rendering: ' .. outcome, function()
@@ -500,7 +499,7 @@ local ok, err = xpcall(function()
               10000,
               function()
                 return split.is_file_tree_visible()
-                  and vim.b.diffhopper_diff_path == 'file.txt'
+                  and vim.b.big_diff_split_path == 'file.txt'
                   and core.get_buf_data(0)
                   and core.get_buf_data(0).ref_text == 'original\n'
               end,
@@ -524,7 +523,7 @@ local ok, err = xpcall(function()
                 function()
                   return split.get_session_id() ~= session
                     and split.is_file_tree_visible()
-                    and vim.b.diffhopper_diff_path == 'file.txt'
+                    and vim.b.big_diff_split_path == 'file.txt'
                 end,
                 5
               ),

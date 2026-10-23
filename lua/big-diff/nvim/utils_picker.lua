@@ -23,15 +23,15 @@ end
 
 function M.header_navigation()
     return {
-        diffhopper_list_down = function(picker)
+        big_diff_list_down = function(picker)
             move_past_headers(picker, 1)
         end,
-        diffhopper_list_up = function(picker)
+        big_diff_list_up = function(picker)
             move_past_headers(picker, -1)
         end,
     }, {
-        ["<C-n>"] = { "diffhopper_list_down", mode = { "i", "n" } },
-        ["<C-p>"] = { "diffhopper_list_up", mode = { "i", "n" } },
+        ["<C-n>"] = { "big_diff_list_down", mode = { "i", "n" } },
+        ["<C-p>"] = { "big_diff_list_up", mode = { "i", "n" } },
     }
 end
 
@@ -49,15 +49,15 @@ function M.regroup_by_parent(picker, matcher, show_headers)
         return
     end
 
-    ---@class DiffHopperPickerGroup
+    ---@class BigDiffPickerGroup
     ---@field parent table|nil
     ---@field items table[]
     ---@field score number
     ---@field min_idx number -- earliest source index for stable sorting
 
-    ---@type table<any, DiffHopperPickerGroup>
+    ---@type table<any, BigDiffPickerGroup>
     local groups = {}
-    ---@type DiffHopperPickerGroup[]
+    ---@type BigDiffPickerGroup[]
     local group_list = {}
 
     local function ensure_group(key, parent, item_index)

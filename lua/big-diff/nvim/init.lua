@@ -146,19 +146,13 @@ MiniDiff.setup = function(config)
   end, { nargs = '?', desc = 'Fold unchanged regions between hunks' })
 
   vim.api.nvim_create_user_command('Diff', function(cmd_opts)
+    local split = require('big-diff.nvim.split')
     local argument = cmd_opts.args
-    local count = argument == 'commit' and '1' or argument
-    if not count:match('^%d+$') then H.log.error('Expected `commit` or a non-negative commit count.') end
+    if argument == '' then return split.toggle() end
 
-    local ok, split_diff = pcall(require, 'diffhopper.split_diff')
-    if not ok then
-      pcall(vim.cmd.packadd, 'diffhopper.nvim')
-      ok, split_diff = pcall(require, 'diffhopper.split_diff')
-    end
-    if not ok then H.log.error('`:Diff` requires diffhopper.nvim.') end
-
-    split_diff.open('HEAD~' .. count)
-  end, { nargs = 1, desc = 'Open a split diff against a commit (`commit` means HEAD~1)' })
+    if argument == 'commit' then argument = '1' end
+    split.open(argument:match('^%d+$') and ('HEAD~' .. argument) or argument)
+  end, { nargs = '?', desc = 'Open a split diff against a ref, HEAD~N, or `commit` (HEAD~1); no argument toggles' })
 
   vim.api.nvim_create_user_command('Differ', function(cmd_opts)
     require('big-diff.nvim.differ').open(cmd_opts.args)

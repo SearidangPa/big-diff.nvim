@@ -5,28 +5,28 @@
 ---`/dev/null` sides for added/deleted files.
 local M = {}
 
----@class DiffHopperPos
+---@class BigDiffPos
 ---@field line number
 ---@field count number
 
----@class DiffHopperHunk
+---@class BigDiffHunk
 ---@field diff string[] hunk header followed by the hunk body
 ---@field line number first line on the right (new) side
 ---@field count number number of lines on the right side
 ---@field change_line number first *changed* line on the right side
 ---@field change_count number changed lines on the right side
----@field changes DiffHopperPos[] contiguous changed ranges on the right side
+---@field changes BigDiffPos[] contiguous changed ranges on the right side
 ---@field context? string git's own `@@ ... @@ func()` trailer
----@field left DiffHopperPos old (normal) / ours (merge)
----@field right DiffHopperPos new (normal) / working (merge)
----@field parents? DiffHopperPos[] theirs (merge)
+---@field left BigDiffPos old (normal) / ours (merge)
+---@field right BigDiffPos new (normal) / working (merge)
+---@field parents? BigDiffPos[] theirs (merge)
 
----@class DiffHopperBlock
+---@class BigDiffBlock
 ---@field file string
 ---@field left? string
 ---@field right? string
 ---@field header string[]
----@field hunks DiffHopperHunk[]
+---@field hunks BigDiffHunk[]
 ---@field binary? boolean
 ---@field unmerged? boolean
 ---@field untracked? boolean
@@ -40,9 +40,9 @@ local M = {}
 ---@field dissimilarity? number
 ---@field index? { from: string, to: string, mode?: string }
 
----@class DiffHopperDiff
+---@class BigDiffDiff
 ---@field header string[]
----@field blocks DiffHopperBlock[]
+---@field blocks BigDiffBlock[]
 
 local PATH_PREFIXES = { "a", "b", "i", "w", "c", "o", "old", "new" }
 
@@ -78,7 +78,7 @@ M.normalize_diff_path = normalize_diff_path
 
 ---Parses `@@ -a,b +c,d @@ context` and the combined `@@@ ... @@@` form.
 ---@param line string
----@return DiffHopperHunk?
+---@return BigDiffHunk?
 function M.parse_hunk_header(line)
     local open, inner, close, context =
         line:match("^(@+)%s*(.-)%s*(@+)%s*(.*)$")
@@ -87,7 +87,7 @@ function M.parse_hunk_header(line)
         return nil
     end
 
-    ---@type DiffHopperPos[]
+    ---@type BigDiffPos[]
     local positions = {}
     for _, part in ipairs(vim.split(inner, "%s+")) do
         local start_line, count = part:match("^[%-+](%d+),?(%d*)$")
@@ -108,7 +108,7 @@ function M.parse_hunk_header(line)
     local right = table.remove(positions)
     local left = table.remove(positions, 1)
 
-    ---@type DiffHopperHunk
+    ---@type BigDiffHunk
     return {
         diff = { line },
         line = right and right.line or 1,
@@ -128,13 +128,13 @@ end
 ---hunk can hold several unrelated edits. Splitting the body back into
 ---contiguous changed ranges keeps per-change granularity (and per-change
 ---treesitter scopes) while the hunk itself keeps its context for previews.
----@param hunk DiffHopperHunk
+---@param hunk BigDiffHunk
 local function compute_changes(hunk)
     local versions = 2 + (hunk.parents and #hunk.parents or 0)
     local prefix_width = versions - 1
     local right_index = hunk.right.line - 1
 
-    ---@type DiffHopperPos[]
+    ---@type BigDiffPos[]
     local changes = {}
     local open = nil
 
@@ -191,7 +191,7 @@ local function compute_changes(hunk)
     end
 end
 
----@param block DiffHopperBlock
+---@param block BigDiffBlock
 local function finalize_block(block)
     for _, line in ipairs(block.header) do
         if line:find("^%-%-%- ") then
@@ -288,15 +288,15 @@ local function finalize_block(block)
 end
 
 ---@param lines string[]
----@return DiffHopperDiff
+---@return BigDiffDiff
 function M.parse(lines)
-    ---@type DiffHopperBlock[]
+    ---@type BigDiffBlock[]
     local blocks = {}
     ---@type string[]
     local header = {}
-    ---@type DiffHopperBlock?
+    ---@type BigDiffBlock?
     local block
-    ---@type DiffHopperHunk?
+    ---@type BigDiffHunk?
     local hunk
     local with_diff_header = false
 
@@ -346,8 +346,8 @@ function M.parse(lines)
     return { blocks = blocks, header = header }
 end
 
----@param diff string|string[]|DiffHopperDiff
----@return DiffHopperDiff
+---@param diff string|string[]|BigDiffDiff
+---@return BigDiffDiff
 function M.get(diff)
     if type(diff) == "string" then
         diff = vim.split(diff, "\n", { plain = true })
@@ -355,13 +355,13 @@ function M.get(diff)
     if type(diff) == "table" and type(diff[1]) == "string" then
         return M.parse(diff)
     end
-    ---@cast diff DiffHopperDiff
+    ---@cast diff BigDiffDiff
     return diff
 end
 
 ---Renders a block back to diff text (block header plus the given hunks).
----@param block DiffHopperBlock
----@param hunks? DiffHopperHunk[] defaults to every hunk of the block
+---@param block BigDiffBlock
+---@param hunks? BigDiffHunk[] defaults to every hunk of the block
 ---@return string
 function M.to_text(block, hunks)
     local lines = vim.deepcopy(block.header)

@@ -1,5 +1,5 @@
 local M = {}
-local truncate = require("diffhopper.util_truncate")
+local truncate = require("big-diff.nvim.utils_truncate")
 
 local highlight_ns = vim.api.nvim_create_namespace("MiniDiffHighlight")
 local current_line_ns =
@@ -41,14 +41,14 @@ function M.render_tests_hidden_badge(window_number, hidden_count)
         or (hidden_count .. " tests hidden")
     -- Blend the winbar into the tree so the rounded caps sit on its background
     vim.wo[window_number].winhighlight =
-        "WinBar:DiffHopperTreeWinBar,WinBarNC:DiffHopperTreeWinBar"
+        "WinBar:BigDiffTreeWinBar,WinBarNC:BigDiffTreeWinBar"
     vim.wo[window_number].winbar = table.concat({
-        "%#DiffHopperTestsHiddenCap#\u{E0B6}", -- rounded left cap
-        "%#DiffHopperTestsHiddenIcon#\u{F0209} ", -- nf-md-eye_off
-        "%#DiffHopperTestsHidden# ",
+        "%#BigDiffTestsHiddenCap#\u{E0B6}", -- rounded left cap
+        "%#BigDiffTestsHiddenIcon#\u{F0209} ", -- nf-md-eye_off
+        "%#BigDiffTestsHidden# ",
         label,
-        " %#DiffHopperTestsHiddenEndCap#\u{E0B4}", -- rounded right cap
-        "%#DiffHopperTreeWinBar#",
+        " %#BigDiffTestsHiddenEndCap#\u{E0B4}", -- rounded right cap
+        "%#BigDiffTreeWinBar#",
     })
 end
 
@@ -67,7 +67,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
     local current_path = nil
     local current_is_diff_path = false
     local ok, diff_path =
-        pcall(vim.api.nvim_buf_get_var, current_buf, "diffhopper_diff_path")
+        pcall(vim.api.nvim_buf_get_var, current_buf, "big_diff_split_path")
     if ok and diff_path and diff_path ~= "" then
         current_path = diff_path
         current_is_diff_path = true
@@ -101,7 +101,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
             truncate.truncate_middle(group, { no_truncate_max = width })
         table.insert(lines, group_display)
         line_to_file_index[#lines] = false
-        highlights[#lines] = "DiffHopperDir"
+        highlights[#lines] = "BigDiffDir"
 
         local group_entries = groups[group]
         for entry_index, entry in ipairs(group_entries) do
@@ -125,7 +125,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
             table.insert(lines, display)
             line_to_file_index[#lines] = entry.index
             if entry.untracked then
-                highlights[#lines] = "DiffHopperUntracked"
+                highlights[#lines] = "BigDiffUntracked"
             elseif entry.status == "A" then
                 highlights[#lines] = "MiniDiffOverAdd"
             else
@@ -210,7 +210,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win)
                 highlight_line - 1,
                 0,
                 {
-                    line_hl_group = "DiffHopperFileName",
+                    line_hl_group = "BigDiffFileName",
                 }
             )
         end
@@ -294,7 +294,7 @@ function M.setup_keymaps(
         local ok, diff_path = pcall(
             vim.api.nvim_buf_get_var,
             current_bufnr,
-            "diffhopper_diff_path"
+            "big_diff_split_path"
         )
         if ok and diff_path and diff_path ~= "" then
             for i, entry in ipairs(files) do
@@ -349,7 +349,7 @@ function M.setup_keymaps(
     end
 
     local sync_group = vim.api.nvim_create_augroup(
-        "DiffHopperSplitDiffSync" .. buffer_number,
+        "BigDiffSplitSync" .. buffer_number,
         { clear = true }
     )
     vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter", "WinEnter" }, {

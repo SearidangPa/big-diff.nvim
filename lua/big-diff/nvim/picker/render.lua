@@ -5,21 +5,21 @@
 ---highlights and optional annotations drawn onto a given file/side/line.
 local M = {}
 
-local diff_parse = require("diffhopper.diff_parse")
+local diff_parse = require("big-diff.nvim.patch")
 
 local CONFLICT_MARKERS = { "<<<<<<<", "=======", ">>>>>>>", "|||||||" }
 
----@class DiffHopperAnnotation
+---@class BigDiffAnnotation
 ---@field file string
 ---@field side "left"|"right"
 ---@field line number
 ---@field text snacks.picker.Highlight[][]
 
----@class DiffHopperRenderOpts
+---@class BigDiffRenderOpts
 ---@field block_header? boolean render file metadata above the hunks
 ---@field max_hunk_lines? number only render the last N lines of a hunk
 ---@field hunk_header? boolean|"context" render the full hunk header, or only its context
----@field annotations? DiffHopperAnnotation[]
+---@field annotations? BigDiffAnnotation[]
 
 ---@return snacks.picker.highlight
 local function highlight_util()
@@ -55,11 +55,11 @@ function M.set_hl()
         BadgeDelete = "DiagnosticError",
         BadgeChange = "DiagnosticWarn",
         BadgeInfo = "DiagnosticHint",
-    }, { prefix = "DiffHopper", default = true })
+    }, { prefix = "BigDiff", default = true, managed = false })
 end
 
 ---Short status badges for a block, e.g. `new`, `deleted`, `renamed`.
----@param block DiffHopperBlock
+---@param block BigDiffBlock
 ---@return snacks.picker.Highlight[]
 function M.badges(block)
     ---@type snacks.picker.Highlight[]
@@ -70,49 +70,49 @@ function M.badges(block)
     end
 
     if block.untracked then
-        add("untracked", "DiffHopperBadgeAdd")
+        add("untracked", "BigDiffBadgeAdd")
     elseif block.new then
-        add("new", "DiffHopperBadgeAdd")
+        add("new", "BigDiffBadgeAdd")
     elseif block.delete then
-        add("deleted", "DiffHopperBadgeDelete")
+        add("deleted", "BigDiffBadgeDelete")
     end
 
     if block.rename then
-        add("renamed", "DiffHopperBadgeChange")
+        add("renamed", "BigDiffBadgeChange")
     elseif block.copy then
-        add("copied", "DiffHopperBadgeChange")
+        add("copied", "BigDiffBadgeChange")
     end
 
     if block.mode and block.mode.from and block.mode.to then
         add(
             ("mode %s → %s"):format(block.mode.from, block.mode.to),
-            "DiffHopperBadgeChange"
+            "BigDiffBadgeChange"
         )
     end
 
     if block.binary then
-        add("binary", "DiffHopperBadgeInfo")
+        add("binary", "BigDiffBadgeInfo")
     end
 
     if block.unmerged then
-        add("conflict", "DiffHopperBadgeDelete")
+        add("conflict", "BigDiffBadgeDelete")
     end
 
     if block.staged then
-        add("staged", "DiffHopperBadgeInfo")
+        add("staged", "BigDiffBadgeInfo")
     end
 
     return badges
 end
 
----@param block DiffHopperBlock
+---@param block BigDiffBlock
 ---@return snacks.picker.Highlight[][]
 function M.format_block_header(block)
     local H = highlight_util()
     ---@type snacks.picker.Highlight[][]
     local rows = {}
 
-    rows[#rows + 1] = H.add_eol({}, "DiffHopperDiffHeader")
+    rows[#rows + 1] = H.add_eol({}, "BigDiffDiffHeader")
 
     local icon, icon_hl = Snacks.util.icon(block.file)
     ---@type snacks.picker.Highlight[]
@@ -121,7 +121,7 @@ function M.format_block_header(block)
     -- Overlay keeps markdown renderers from eating the leading spaces.
     row[#row + 1] = {
         col = 0,
-        virt_text = { { "  ", "DiffHopperDiffHeader" } },
+        virt_text = { { "  ", "BigDiffDiffHeader" } },
         virt_text_pos = "overlay",
     }
     row[#row + 1] = { icon, icon_hl, inline = true }
@@ -139,17 +139,17 @@ function M.format_block_header(block)
         row[#row + 1] = { block.file }
     end
 
-    H.insert_hl(row, "DiffHopperDiffHeader")
+    H.insert_hl(row, "BigDiffDiffHeader")
 
     for _, badge in ipairs(M.badges(block)) do
         row[#row + 1] = { "  " }
         row[#row + 1] = { badge[1], badge[2] }
     end
 
-    H.add_eol(row, "DiffHopperDiffHeader")
+    H.add_eol(row, "BigDiffDiffHeader")
     rows[#rows + 1] = row
 
-    rows[#rows + 1] = H.add_eol({}, "DiffHopperDiffHeader")
+    rows[#rows + 1] = H.add_eol({}, "BigDiffDiffHeader")
 
     if block.binary and #block.hunks == 0 then
         rows[#rows + 1] = { { "  binary file not shown", "Comment" } }
@@ -160,13 +160,13 @@ end
 
 ---Splits a hunk body into prefixes, code lines and conflict markers, and
 ---pre-renders the code with treesitter highlights.
----@param block DiffHopperBlock
----@param hunk DiffHopperHunk
+---@param block BigDiffBlock
+---@param hunk BigDiffHunk
 local function parse_hunk(block, hunk)
     local H = highlight_util()
     local body = vim.list_slice(hunk.diff, 2)
 
-    ---@type DiffHopperPos[]
+    ---@type BigDiffPos[]
     local versions = { hunk.left }
     vim.list_extend(versions, hunk.parents or {})
     versions[#versions + 1] = hunk.right
@@ -264,7 +264,7 @@ local function build_index(parsed)
     return index
 end
 
----@param hunk DiffHopperHunk
+---@param hunk BigDiffHunk
 ---@return snacks.picker.Highlight[][]
 local function format_hunk_header(hunk, mode)
     local context = hunk.context
@@ -279,9 +279,9 @@ local function format_hunk_header(hunk, mode)
     local H = highlight_util()
     local row = {
         { " " },
-        { context, "DiffHopperDiffHeader" },
+        { context, "BigDiffDiffHeader" },
     }
-    H.add_eol(row, "DiffHopperDiffHeader")
+    H.add_eol(row, "BigDiffDiffHeader")
     return { row }
 end
 
@@ -341,9 +341,9 @@ local function format_annotation(annotation, ctx)
     return rows
 end
 
----@param block DiffHopperBlock
----@param hunk DiffHopperHunk
----@param opts DiffHopperRenderOpts
+---@param block BigDiffBlock
+---@param hunk BigDiffHunk
+---@param opts BigDiffRenderOpts
 ---@return snacks.picker.Highlight[][]
 function M.format_hunk(block, hunk, opts)
     local H = highlight_util()
@@ -372,10 +372,10 @@ function M.format_hunk(block, hunk, opts)
         local right_side = #parsed.versions
         local has_left = index[row][1] ~= nil
         local has_right = index[row][right_side] ~= nil
-        local hl = (parsed.conflict_markers[row] and "DiffHopperDiffConflict")
-            or (has_right and not has_left and "DiffHopperDiffAdd")
-            or (has_left and not has_right and "DiffHopperDiffDelete")
-            or "DiffHopperDiffContext"
+        local hl = (parsed.conflict_markers[row] and "BigDiffDiffConflict")
+            or (has_right and not has_left and "BigDiffDiffAdd")
+            or (has_left and not has_right and "BigDiffDiffDelete")
+            or "BigDiffDiffContext"
 
         local prefix = parsed.prefixes[row]
         if parsed.unmerged then
@@ -486,8 +486,8 @@ function M.format_hunk(block, hunk, opts)
     return rows
 end
 
----@param block DiffHopperBlock
----@param opts DiffHopperRenderOpts
+---@param block BigDiffBlock
+---@param opts BigDiffRenderOpts
 ---@return snacks.picker.Highlight[][]
 function M.format_block(block, opts)
     ---@type snacks.picker.Highlight[][]
@@ -503,8 +503,8 @@ function M.format_block(block, opts)
     return rows
 end
 
----@param diff string|string[]|DiffHopperDiff
----@param opts? DiffHopperRenderOpts
+---@param diff string|string[]|BigDiffDiff
+---@param opts? BigDiffRenderOpts
 ---@return snacks.picker.Highlight[][]
 function M.format(diff, opts)
     opts = opts or {}
@@ -519,10 +519,13 @@ end
 
 ---@param buf number
 ---@param ns number
----@param diff string|string[]|DiffHopperDiff
----@param opts? DiffHopperRenderOpts
+---@param diff string|string[]|BigDiffDiff
+---@param opts? BigDiffRenderOpts
 function M.render(buf, ns, diff, opts)
     return highlight_util().render(buf, ns, M.format(diff, opts))
 end
+
+-- Refreshed on ColorScheme by `viz.create_default_hl()`
+M.set_hl()
 
 return M

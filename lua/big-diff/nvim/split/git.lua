@@ -1,5 +1,5 @@
 local M = {}
-local git_util = require("diffhopper.util_git")
+local git_util = require("big-diff.nvim.utils_git")
 
 local function prepare_window_for_hunk_folds(win)
     if not vim.api.nvim_win_is_valid(win) then
@@ -176,7 +176,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
     -- A PR cache refresh can replace/close the view while these Git reads run.
     -- Guard file callbacks too, not just the outer changed-files query: an old
     -- hunk result must not steal the buffer/focus from a newer session.
-    local split = require("diffhopper.split_diff")
+    local split = require("big-diff.nvim.split")
     local session_id = split.get_session_id()
     local function is_current()
         return split.get_session_id() == session_id
@@ -200,7 +200,7 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
         vim.api.nvim_set_current_win(main_win)
         local buf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_win_set_buf(main_win, buf)
-        vim.api.nvim_buf_set_name(buf, "diffhopper://deleted/" .. file)
+        vim.api.nvim_buf_set_name(buf, "big-diff://deleted/" .. file)
         vim.bo[buf].buftype = "nofile"
         vim.bo[buf].bufhidden = "wipe"
         vim.bo[buf].swapfile = false
@@ -237,10 +237,10 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
                 vim.bo[buf].readonly = true
                 vim.api.nvim_win_set_cursor(main_win, { 1, 0 })
                 vim.api.nvim_exec_autocmds("BufReadPost", { buffer = buf })
-                vim.b[buf].diffhopper_diff_path = file
-                vim.b[buf].diffhopper_diff_status = status
+                vim.b[buf].big_diff_split_path = file
+                vim.b[buf].big_diff_split_status = status
                 vim.wo[main_win].winhl =
-                    "Normal:DiffHopperDeleted,NormalNC:DiffHopperDeleted"
+                    "Normal:BigDiffDeleted,NormalNC:BigDiffDeleted"
                 if on_open then
                     on_open()
                 end
@@ -267,8 +267,8 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             if vim.api.nvim_win_is_valid(main_win) then
                 vim.wo[main_win].winhl = ""
             end
-            vim.b.diffhopper_diff_path = file
-            vim.b.diffhopper_diff_status = status or "M"
+            vim.b.big_diff_split_path = file
+            vim.b.big_diff_split_status = status or "M"
 
             local line_count = vim.api.nvim_buf_line_count(0)
             local target_line = math.max(1, math.min(hunk_line, line_count))
@@ -281,8 +281,8 @@ function M.open_file_in_main_win(base, git_root, entry, main_win, on_open)
             end
             vim.cmd("silent! normal! zE")
             fold_between_hunks_from_git(#fold_hunks > 0 and fold_hunks or hunks)
-            vim.b.diffhopper_split_diff_fold_base = base
-            vim.b.diffhopper_split_diff_fold_path = file
+            vim.b.big_diff_split_fold_base = base
+            vim.b.big_diff_split_fold_path = file
             vim.api.nvim_win_set_cursor(0, { target_line, 0 })
             pcall(require("big-diff.nvim").enable, 0)
             if on_open then

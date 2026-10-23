@@ -1,15 +1,15 @@
 ---Previewer for picker items that carry a `diff` payload.
 ---
 ---Styles:
----  * `fancy`    - diffhopper's own renderer (default)
+---  * `fancy`    - big-diff's own renderer (default)
 ---  * `syntax`   - plain diff text with `ft=diff`
 ---  * `terminal` - pipe the diff through an external pager such as `delta`
 local M = {}
 
-local config = require("diffhopper.config")
-local diff_render = require("diffhopper.diff_render")
+local config = require("big-diff.nvim.config")
+local diff_render = require("big-diff.nvim.picker.render")
 
-local namespace = vim.api.nvim_create_namespace("diffhopper.diff_preview")
+local namespace = vim.api.nvim_create_namespace("big-diff.nvim.picker.preview")
 
 ---@param ctx snacks.picker.preview.ctx
 local function preview_syntax(ctx)
@@ -20,7 +20,7 @@ end
 
 ---@param ctx snacks.picker.preview.ctx
 local function preview_fancy(ctx)
-    local options = config.get().preview
+    local options = config.get_picker_config().preview
     local buf = ctx.preview:scratch()
     diff_render.render(buf, namespace, ctx.item.diff, {
         block_header = false,
@@ -33,7 +33,7 @@ end
 
 ---@param ctx snacks.picker.preview.ctx
 local function preview_terminal(ctx)
-    local cmd = vim.deepcopy(config.get().preview.cmd)
+    local cmd = vim.deepcopy(config.get_picker_config().preview.cmd)
     if
         cmd[1] == "delta"
         and not vim.tbl_contains(cmd, "--dark")
@@ -58,10 +58,10 @@ function M.preview(ctx)
         return Snacks.picker.preview.none(ctx)
     end
 
-    local style = config.get().preview.style
+    local style = config.get_picker_config().preview.style
     if
         style == "terminal"
-        and vim.fn.executable(config.get().preview.cmd[1]) == 0
+        and vim.fn.executable(config.get_picker_config().preview.cmd[1]) == 0
     then
         style = "fancy"
     end
@@ -75,7 +75,7 @@ function M.preview(ctx)
     local ok, err = pcall(preview_fancy, ctx)
     if not ok then
         vim.notify(
-            "diffhopper: fancy diff preview failed: " .. tostring(err),
+            "big-diff: fancy diff preview failed: " .. tostring(err),
             vim.log.levels.WARN
         )
         preview_syntax(ctx)

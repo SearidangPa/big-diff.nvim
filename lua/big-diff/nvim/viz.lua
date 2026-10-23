@@ -554,6 +554,25 @@ M.create_default_hl = function()
     hi_overlay('MiniDiffOverChangeBuf', { bg = '#CFE6BB' })
   end
 
+  -- Split view file tree
+  hi_overlay('BigDiffFileName', { fg = is_dark and '#3E8FB0' or '#276983' })
+  hi_overlay('BigDiffDir', { fg = is_dark and '#9CCFD9' or '#1EAC85' })
+  hi_overlay('BigDiffUntracked', { bg = is_dark and '#4F4626' or '#FEFEF9' })
+  hi_overlay('BigDiffDeleted', { link = 'MiniDiffOverDelete' })
+
+  -- "Tests hidden" badge in the file tree winbar
+  local badge_accent = is_dark and '#f6c177' or '#ea9d34'
+  local badge_body = is_dark and '#26233a' or '#f2e9e1'
+  local badge_ink = is_dark and '#191724' or '#faf4ed'
+  hi_overlay('BigDiffTreeWinBar', { link = 'Normal' })
+  hi_overlay('BigDiffTestsHiddenCap', { fg = badge_accent })
+  hi_overlay('BigDiffTestsHiddenIcon', { fg = badge_ink, bg = badge_accent, bold = true })
+  hi_overlay('BigDiffTestsHidden', { fg = badge_accent, bg = badge_body, bold = true })
+  hi_overlay('BigDiffTestsHiddenEndCap', { fg = badge_body })
+
+  -- Picker preview groups derive from the colorscheme, so refresh them once loaded
+  local render = package.loaded['big-diff.nvim.picker.render']
+  if render then render.set_hl() end
 end
 
 M.clear_blended_hl_cache = function()

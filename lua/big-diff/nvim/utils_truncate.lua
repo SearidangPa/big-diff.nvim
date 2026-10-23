@@ -6,7 +6,7 @@ local default_opts = {
     pattern = "[^%s_%-%+%.]+",
 }
 
----@param options? diffhopper.TruncateMiddleOpts
+---@param options? BigDiffTruncateMiddleOpts
 local function normalize_opts(options)
     options = options or {}
 
@@ -28,7 +28,7 @@ local function normalize_opts(options)
     }
 end
 
----@class diffhopper.TruncateMiddleOpts
+---@class BigDiffTruncateMiddleOpts
 ---@field part_len? number Number of characters to keep from each part.
 ---@field no_truncate_max? number Maximum length of string to avoid truncation.
 ---@field empty_fallback_len? number Number of characters to return when input string has no parts.
@@ -36,7 +36,7 @@ end
 ---@field pattern? string Lua pattern used to split the string into parts.
 
 ---@param input_string string Input string to truncate.
----@param options? diffhopper.TruncateMiddleOpts Options for truncation.
+---@param options? BigDiffTruncateMiddleOpts Options for truncation.
 function M.truncate_middle(input_string, options)
     if type(input_string) ~= "string" then
         return ""

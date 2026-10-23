@@ -1,7 +1,7 @@
 local M = {}
-local git = require("diffhopper.split_diff.git")
-local ui = require("diffhopper.split_diff.ui")
-local git_util = require("diffhopper.util_git")
+local git = require("big-diff.nvim.split.git")
+local ui = require("big-diff.nvim.split.ui")
+local git_util = require("big-diff.nvim.utils_git")
 
 local state = {
     open_next_file = nil,
@@ -388,6 +388,90 @@ function M.previous_file()
     if state.open_previous_file then
         state.open_previous_file()
     end
+end
+
+---Steps an open view through hiding its file tree, showing it again, then
+---closing it.
+---@return boolean handled false when no view is open
+local function step_open_view()
+    if not M.is_open() then
+        return false
+    end
+
+    if not M.has_done_first_toggle() then
+        M.mark_first_toggle_done()
+        M.hide_file_tree()
+    elseif not M.is_file_tree_visible() then
+        M.show_file_tree()
+    else
+        M.close()
+    end
+
+    return true
+end
+
+---Toggles the view against `base`, or against a picked branch when `base` is
+---nil.
+---@param base? string
+function M.toggle(base)
+    if step_open_view() then
+        return
+    end
+
+    if base then
+        M.open(base)
+        return
+    end
+
+    Snacks.picker.git_branches({
+        all = true,
+        confirm = function(picker, item)
+            picker:close()
+            if item and item.branch then
+                M.open(item.branch)
+            end
+        end,
+    })
+end
+
+---Toggles the view against the detected default base branch.
+function M.toggle_main()
+    if step_open_view() then
+        return
+    end
+
+    git_util.get_default_base_branch_async(function(branch)
+        M.open(branch)
+    end)
+end
+
+---Toggles the view against the parent of HEAD, i.e. the latest commit.
+function M.toggle_last_commit()
+    if step_open_view() then
+        return
+    end
+
+    vim.system({
+        "git",
+        "-C",
+        git_util.find_git_root() or ".",
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "HEAD~1",
+    }, { text = true }, function(obj)
+        local sha = vim.trim(obj.stdout or "")
+        vim.schedule(function()
+            if obj.code ~= 0 or sha == "" then
+                vim.notify(
+                    "No previous commit to diff the latest commit against",
+                    vim.log.levels.WARN
+                )
+                return
+            end
+            M.open(sha)
+        end)
+    end)
 end
 
 return M

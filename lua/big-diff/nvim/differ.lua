@@ -74,15 +74,7 @@ function M.open(input, opts)
     end
   end
 
-  local ok, split_diff = pcall(require, 'diffhopper.split_diff')
-  if not ok then
-    pcall(vim.cmd.packadd, 'diffhopper.nvim')
-    ok, split_diff = pcall(require, 'diffhopper.split_diff')
-  end
-  if not ok then
-    log.notify('`:Differ` requires diffhopper.nvim.', 'ERROR')
-    return
-  end
+  local split_diff = require('big-diff.nvim.split')
 
   local initial_session = split_diff.get_session_id()
   local initial_view_open = split_diff.is_open()
@@ -141,7 +133,7 @@ function M.open(input, opts)
     local in_initial_view = initial_view_open
       and split_diff.is_open()
       and split_diff.get_session_id() == initial_session
-      and type(vim.b.diffhopper_diff_path) == 'string'
+      and type(vim.b.big_diff_split_path) == 'string'
     if
       not vim.api.nvim_win_is_valid(win)
       or vim.api.nvim_get_current_win() ~= win

@@ -57,6 +57,46 @@ M.default_config = {
     message_suffix = '',
   },
 
+  -- Git hunk picker (`require('big-diff.nvim.picker')`)
+  picker = {
+    -- Collapse every hunk of a file into a single item
+    group = false,
+
+    -- Show <M-a>..<M-z> jump labels on picker items
+    jump_labels = true,
+
+    git = {
+      -- Lines of unified context captured for hunk previews
+      context_lines = 3,
+
+      -- Diff against the merge base of the given ref, not the ref tip
+      merge_base = true,
+
+      -- List untracked files as new-file hunks
+      include_untracked = true,
+
+      -- Pass --ignore-all-space
+      ignore_whitespace = false,
+
+      -- Untracked files bigger than this are shown as a stub
+      untracked_max_bytes = 512 * 1024,
+    },
+
+    preview = {
+      -- 'fancy' | 'syntax' | 'terminal'
+      style = 'fancy',
+
+      -- Pager used by the 'terminal' style
+      cmd = { 'delta' },
+
+      -- Render only the last N lines of a huge hunk
+      max_hunk_lines = 200,
+
+      -- Render the hunk header row (true), or only its context ('context')
+      hunk_header = true,
+    },
+  },
+
   -- Various options
   options = {
     -- Diff algorithm. See `:h vim.text.diff()`
@@ -116,6 +156,20 @@ M.setup_config = function(config)
   H.check_type('review.message_prefix', config.review.message_prefix, 'string')
   H.check_type('review.message_suffix', config.review.message_suffix, 'string')
 
+  H.check_type('picker', config.picker, 'table')
+  H.check_type('picker.group', config.picker.group, 'boolean')
+  H.check_type('picker.jump_labels', config.picker.jump_labels, 'boolean')
+  H.check_type('picker.git', config.picker.git, 'table')
+  H.check_type('picker.git.context_lines', config.picker.git.context_lines, 'number')
+  H.check_type('picker.git.merge_base', config.picker.git.merge_base, 'boolean')
+  H.check_type('picker.git.include_untracked', config.picker.git.include_untracked, 'boolean')
+  H.check_type('picker.git.ignore_whitespace', config.picker.git.ignore_whitespace, 'boolean')
+  H.check_type('picker.git.untracked_max_bytes', config.picker.git.untracked_max_bytes, 'number')
+  H.check_type('picker.preview', config.picker.preview, 'table')
+  H.check_type('picker.preview.style', config.picker.preview.style, 'string')
+  H.check_type('picker.preview.cmd', config.picker.preview.cmd, 'table')
+  H.check_type('picker.preview.max_hunk_lines', config.picker.preview.max_hunk_lines, 'number', true)
+
   H.check_type('options', config.options, 'table')
   H.check_type('options.algorithm', config.options.algorithm, 'string')
   H.check_type('options.indent_heuristic', config.options.indent_heuristic, 'boolean')
@@ -128,6 +182,12 @@ end
 M.get_buf_var = function(buf_id, name)
   if not vim.api.nvim_buf_is_valid(buf_id) then return nil end
   return vim.b[buf_id or 0][name]
+end
+
+-- Picker options of the active setup, or the defaults before `setup()`
+M.get_picker_config = function()
+  local config = _G.MiniDiff and _G.MiniDiff.config or M.default_config
+  return config.picker
 end
 
 -- Use `MiniDiff.config` as a global config, but allow local override

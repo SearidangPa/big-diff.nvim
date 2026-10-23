@@ -1,12 +1,12 @@
 local M = {}
 
-local config = require("diffhopper.config")
-local diff_parse = require("diffhopper.diff_parse")
-local diff_preview = require("diffhopper.diff_preview")
-local diff_render = require("diffhopper.diff_render")
-local picker_context = require("diffhopper.utils_picker_context")
-local git_util = require("diffhopper.util_git")
-local picker_util = require("diffhopper.util_picker")
+local config = require("big-diff.nvim.config")
+local diff_parse = require("big-diff.nvim.patch")
+local diff_preview = require("big-diff.nvim.picker.preview")
+local diff_render = require("big-diff.nvim.picker.render")
+local picker_context = require("big-diff.nvim.utils_picker_context")
+local git_util = require("big-diff.nvim.utils_git")
+local picker_util = require("big-diff.nvim.utils_picker")
 local filesystem = vim.uv or vim.loop
 
 local jump_label_attached = setmetatable({}, { __mode = "k" })
@@ -78,7 +78,7 @@ local function format_item(item, options)
     -- name even when the picker is scoped to a single file.
     local show_filename = options.show_filename or item.standalone or false
     local formatted_item = picker_context.format_item(item, {
-        header_hl_group = "DiffHopperFileName",
+        header_hl_group = "BigDiffFileName",
         show_filename = show_filename,
         show_tree = show_filename and not item.standalone,
     })
@@ -119,11 +119,11 @@ end
 ---@field staged? boolean true: index only, false: worktree only, nil: both
 ---@field group? boolean one item per file instead of one per hunk
 ---@field ignore_whitespace? boolean
----@field annotations? DiffHopperAnnotation[]
+---@field annotations? BigDiffAnnotation[]
 ---@field pattern? string initial picker input
 
 ---@param options GitDiffFilterOpts
----@param block DiffHopperBlock
+---@param block BigDiffBlock
 ---@return boolean
 local function is_filtered_out(options, block)
     local is_test = is_test_path(block.file)
@@ -174,7 +174,7 @@ end
 ---or a single item when the block carries no hunks (binary, mode-only,
 ---deleted) or when grouping is on.
 ---@param options GitDiffFilterOpts
----@param block DiffHopperBlock
+---@param block BigDiffBlock
 ---@param git_root string
 ---@return table[]
 local function block_items(options, block, git_root)
@@ -183,7 +183,7 @@ local function block_items(options, block, git_root)
 
     -- One entry per contiguous changed range, so a single -U3 hunk that
     -- touches two functions still yields two rows.
-    ---@type { hunk: DiffHopperHunk, line: number, count: number }[]
+    ---@type { hunk: BigDiffHunk, line: number, count: number }[]
     local changes = {}
     for _, hunk in ipairs(block.hunks) do
         for _, change in ipairs(hunk.changes or {}) do
@@ -341,12 +341,12 @@ end
 ---@param base string
 local function build_toggle_actions(options, base)
     local actions = {
-        diffhopper_toggle_whitespace = function(picker)
+        big_diff_toggle_whitespace = function(picker)
             reopen(picker, options, base, {
                 ignore_whitespace = not options.ignore_whitespace,
             })
         end,
-        diffhopper_toggle_staged = function(picker)
+        big_diff_toggle_staged = function(picker)
             local next_staged = nil
             if options.staged == nil then
                 next_staged = true
@@ -355,15 +355,15 @@ local function build_toggle_actions(options, base)
             end
             reopen(picker, options, base, { staged = next_staged })
         end,
-        diffhopper_toggle_group = function(picker)
+        big_diff_toggle_group = function(picker)
             reopen(picker, options, base, { group = not options.group })
         end,
     }
 
     local keys = {
-        ["<M-W>"] = { "diffhopper_toggle_whitespace", mode = { "i", "n" } },
-        ["<M-S>"] = { "diffhopper_toggle_staged", mode = { "i", "n" } },
-        ["<M-G>"] = { "diffhopper_toggle_group", mode = { "i", "n" } },
+        ["<M-W>"] = { "big_diff_toggle_whitespace", mode = { "i", "n" } },
+        ["<M-S>"] = { "big_diff_toggle_staged", mode = { "i", "n" } },
+        ["<M-G>"] = { "big_diff_toggle_group", mode = { "i", "n" } },
     }
 
     return actions, keys
@@ -372,7 +372,7 @@ end
 ---Process blocks and display picker (core logic extracted for reuse)
 ---@param options GitDiffFilterOpts
 ---@param base string
----@param blocks DiffHopperBlock[]
+---@param blocks BigDiffBlock[]
 local function process_blocks_and_show_picker(options, base, blocks)
     local git_root = options.git_root
 
@@ -389,7 +389,7 @@ local function process_blocks_and_show_picker(options, base, blocks)
     end
 
     local label_actions, label_keys = {}, {}
-    if config.get().picker.jump_labels then
+    if config.get_picker_config().jump_labels then
         label_actions, label_keys = build_label_actions()
     end
     local toggle_actions, toggle_keys = build_toggle_actions(options, base)
@@ -436,12 +436,12 @@ local function process_blocks_and_show_picker(options, base, blocks)
                     prev_on_done(matcher)
                 end
                 picker_util.regroup_by_parent(picker, matcher, not options.file)
-                if config.get().picker.jump_labels then
+                if config.get_picker_config().jump_labels then
                     assign_jump_labels(picker)
                 end
             end
 
-            if config.get().picker.jump_labels then
+            if config.get_picker_config().jump_labels then
                 assign_jump_labels(picker)
             end
         end,
@@ -486,7 +486,7 @@ local function process_blocks_and_show_picker(options, base, blocks)
 
             if vim.fn.filereadable(item.file) == 0 then
                 vim.notify(
-                    "diffhopper: "
+                    "big-diff: "
                         .. (item.rel_file or item.file)
                         .. " is not in the working tree",
                     vim.log.levels.WARN
@@ -547,13 +547,13 @@ end
 function M.pick(options)
     options = options or {}
     local base = options.base or "HEAD"
-    local git_config = config.get().git
+    local git_config = config.get_picker_config().git
 
     if options.ignore_whitespace == nil then
         options.ignore_whitespace = git_config.ignore_whitespace
     end
     if options.group == nil then
-        options.group = config.get().picker.group
+        options.group = config.get_picker_config().group
     end
 
     if options.file and options.file ~= "" then

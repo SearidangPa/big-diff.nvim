@@ -221,9 +221,9 @@ function M.get_default_base_branch_async(callback, options)
     end)
 end
 
----@class DiffHopperHunkItem : DiffHopperHunk
+---@class BigDiffHunkItem : BigDiffHunk
 ---@field file string repo relative path
----@field block DiffHopperBlock
+---@field block BigDiffBlock
 
 local function uv()
     return vim.uv or vim.loop
@@ -259,9 +259,9 @@ end
 ---@param git_root string
 ---@param file string
 ---@param max_bytes number
----@return DiffHopperBlock?
+---@return BigDiffBlock?
 local function untracked_block(git_root, file, max_bytes)
-    local diff_parse = require("diffhopper.diff_parse")
+    local diff_parse = require("big-diff.nvim.patch")
     local content, too_large = read_file(git_root .. "/" .. file, max_bytes)
 
     local lines = {
@@ -329,7 +329,7 @@ local function pathspec(this_file, git_root)
     return this_file
 end
 
----@class DiffHopperDiffOpts
+---@class BigDiffDiffOpts
 ---@field git_root? string
 ---@field buffer_number? integer
 ---@field ignore_whitespace? boolean
@@ -346,14 +346,14 @@ end
 ---text in `.diff` and its file metadata in `.block`.
 ---@param base? string
 ---@param this_file? string
----@param callback fun(hunks: DiffHopperHunkItem[], blocks: DiffHopperBlock[])
----@param options? DiffHopperDiffOpts
+---@param callback fun(hunks: BigDiffHunkItem[], blocks: BigDiffBlock[])
+---@param options? BigDiffDiffOpts
 function M.get_diff_hunks(base, this_file, callback, options)
     base = base or "HEAD"
 
     options = options or {}
     local git_root = options.git_root or M.find_git_root(options.buffer_number)
-    local diff_parse = require("diffhopper.diff_parse")
+    local diff_parse = require("big-diff.nvim.patch")
     local file = pathspec(this_file, git_root)
 
     ---@param use_merge_base boolean
@@ -465,7 +465,8 @@ function M.get_diff_hunks(base, this_file, callback, options)
 
         collect_extras(function(untracked, staged)
             local max_bytes =
-                require("diffhopper.config").get().git.untracked_max_bytes
+                require("big-diff.nvim.config").get_picker_config().git
+                    .untracked_max_bytes
             for _, path in ipairs(untracked) do
                 local block = untracked_block(git_root or ".", path, max_bytes)
                 if block then
@@ -481,11 +482,11 @@ function M.get_diff_hunks(base, this_file, callback, options)
                 end
             end
 
-            ---@type DiffHopperHunkItem[]
+            ---@type BigDiffHunkItem[]
             local hunks = {}
             for _, block in ipairs(blocks) do
                 for _, hunk in ipairs(block.hunks) do
-                    local item = hunk --[[@as DiffHopperHunkItem]]
+                    local item = hunk --[[@as BigDiffHunkItem]]
                     item.file = block.file
                     item.block = block
                     hunks[#hunks + 1] = item
