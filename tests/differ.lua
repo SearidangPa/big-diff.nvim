@@ -480,9 +480,19 @@ local ok, err = xpcall(function()
             code = 0,
             stderr = '',
             stdout = vim.json.encode({
-              source = 'remote-pr',
-              pr_url = url,
-              snapshot_age_ms = 600000,
+              ok = true,
+              repo = 'PreVeil/drive',
+              branch = 'feature',
+              source = 'cache',
+              age_seconds = 600,
+              pull = {
+                number = pr.number,
+                url = url,
+                base_ref_name = pr.baseRefName,
+                base_ref_oid = pr.baseRefOid,
+                head_ref_name = pr.headRefName,
+                head_ref_oid = pr.headRefOid,
+              },
             }),
           })
           assert(
@@ -503,7 +513,9 @@ local ok, err = xpcall(function()
           scenario.gh_reply({
             code = 0,
             stderr = '',
-            stdout = outcome == 'none' and '' or (outcome == 'same' and url or url:gsub('1944', '2000')),
+            stdout = outcome == 'none' and '' or vim.json.encode(vim.tbl_extend('force', pr, {
+              url = outcome == 'same' and url or url:gsub('1944', '2000'),
+            })),
           })
           if outcome == 'different' then
             assert(
