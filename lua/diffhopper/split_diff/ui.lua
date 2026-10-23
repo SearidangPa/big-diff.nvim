@@ -29,6 +29,29 @@ function M.create_split_buffer()
     return buffer_number, window_number
 end
 
+-- Pin a pill-shaped "tests hidden" badge to the tree's winbar, or clear it
+-- when hidden_count is nil.
+function M.render_tests_hidden_badge(window_number, hidden_count)
+    if hidden_count == nil then
+        vim.wo[window_number].winbar = ""
+        return
+    end
+
+    local label = hidden_count == 1 and "1 test hidden"
+        or (hidden_count .. " tests hidden")
+    -- Blend the winbar into the tree so the rounded caps sit on its background
+    vim.wo[window_number].winhighlight =
+        "WinBar:DiffHopperTreeWinBar,WinBarNC:DiffHopperTreeWinBar"
+    vim.wo[window_number].winbar = table.concat({
+        "%#DiffHopperTestsHiddenCap#\u{E0B6}", -- rounded left cap
+        "%#DiffHopperTestsHiddenIcon#\u{F0209} ", -- nf-md-eye_off
+        "%#DiffHopperTestsHidden# ",
+        label,
+        " %#DiffHopperTestsHiddenEndCap#\u{E0B4}", -- rounded right cap
+        "%#DiffHopperTreeWinBar#",
+    })
+end
+
 function M.render_files(buffer_number, window_number, files, git_root, main_win)
     local width = vim.api.nvim_win_get_width(window_number) - 2
     local lines = {}

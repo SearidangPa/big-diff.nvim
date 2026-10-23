@@ -41,6 +41,32 @@ M.setup = function(user_options)
             { link = "MiniDiffOverDelete" }
         )
 
+        -- "Tests hidden" badge in the split diff file tree
+        local badge_accent = is_dark and "#f6c177" or "#ea9d34"
+        local badge_body = is_dark and "#26233a" or "#f2e9e1"
+        local badge_ink = is_dark and "#191724" or "#faf4ed"
+        vim.api.nvim_set_hl(0, "DiffHopperTreeWinBar", { link = "Normal" })
+        vim.api.nvim_set_hl(
+            0,
+            "DiffHopperTestsHiddenCap",
+            { fg = badge_accent }
+        )
+        vim.api.nvim_set_hl(
+            0,
+            "DiffHopperTestsHiddenIcon",
+            { fg = badge_ink, bg = badge_accent, bold = true }
+        )
+        vim.api.nvim_set_hl(
+            0,
+            "DiffHopperTestsHidden",
+            { fg = badge_accent, bg = badge_body, bold = true }
+        )
+        vim.api.nvim_set_hl(
+            0,
+            "DiffHopperTestsHiddenEndCap",
+            { fg = badge_body }
+        )
+
         pcall(require("diffhopper.diff_render").set_hl)
     end
 

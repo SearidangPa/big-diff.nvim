@@ -31,7 +31,7 @@ local function clear_state()
     state.base = nil
     state.files = nil
     state.all_files = nil
-    state.exclude_tests = false
+    -- exclude_tests is a user preference, so it survives across diff sessions
     state.git_root = nil
     state.main_win = nil
     state.original_base_ref = nil
@@ -141,6 +141,11 @@ local function render_file_tree()
         end,
     })
 
+    ui.render_tests_hidden_badge(
+        window_number,
+        state.exclude_tests and (#state.all_files - #state.files) or nil
+    )
+
     local line_to_file_index, apply_line_highlights, highlight_current_file =
         ui.render_files(
             buffer_number,
@@ -161,19 +166,7 @@ local function render_file_tree()
         apply_line_highlights,
         highlight_current_file,
         git.open_file_in_main_win,
-        function()
-            state.exclude_tests = not state.exclude_tests
-            M.hide_file_tree()
-            local navigation = render_file_tree()
-            if navigation then
-                navigation.sync_current_file()
-            end
-            vim.notify(
-                state.exclude_tests and "Excluded test files"
-                    or "Showing test files",
-                vim.log.levels.INFO
-            )
-        end
+        M.toggle_exclude_tests
     )
 
     state.open_next_file = navigation.open_next_file
@@ -308,6 +301,39 @@ function M.toggle_file_tree()
         return
     end
     M.show_file_tree()
+end
+
+-- Hide or show test files in the file tree. Without an open diff this only
+-- flips the preference, which the next diff picks up.
+function M.toggle_exclude_tests()
+    state.exclude_tests = not state.exclude_tests
+
+    if not M.is_open() then
+        vim.notify(
+            state.exclude_tests and "Test files will be hidden in the next diff"
+                or "Test files will be shown in the next diff",
+            vim.log.levels.INFO
+        )
+        return
+    end
+
+    -- Re-render even a hidden tree: next/previous file navigation is rebuilt
+    -- from the filtered list, and the badge is the only visible cue.
+    local previous_win = vim.api.nvim_get_current_win()
+    local was_in_tree = previous_win == state.window_number
+    M.hide_file_tree()
+    local navigation = render_file_tree()
+    if navigation then
+        navigation.sync_current_file()
+    end
+    if not was_in_tree and vim.api.nvim_win_is_valid(previous_win) then
+        vim.api.nvim_set_current_win(previous_win)
+    end
+
+    vim.notify(
+        state.exclude_tests and "Hiding test files" or "Showing test files",
+        vim.log.levels.INFO
+    )
 end
 
 function M.close()
