@@ -184,6 +184,23 @@ local ok, err = xpcall(function()
     eq(url, calls[2].args[4])
   end)
 
+  test('opens from a repository directory buffer without using its parent', function()
+    prepare({ have_base = true })
+    vim.cmd.edit(vim.fn.fnameescape(checkout))
+    eq('', vim.bo.buftype)
+    invoke()
+    eq({ merge_base }, opened)
+    eq(vim.fn.resolve(checkout), vim.fn.resolve(find_call('rev-parse').cwd))
+  end)
+
+  test('opens from an unnamed buffer using the working directory', function()
+    prepare({ have_base = true })
+    vim.cmd.enew()
+    invoke()
+    eq({ merge_base }, opened)
+    eq(vim.fn.resolve(checkout), vim.fn.resolve(find_call('rev-parse').cwd))
+  end)
+
   test('uses upstream HTTPS remote for fork PRs', function()
     prepare({
       upstream = true,

@@ -123,8 +123,12 @@ function M.open(input, opts)
   local win, buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
   local original_cwd = vim.fn.getcwd()
   local path = vim.api.nvim_buf_get_name(buf)
-  local cwd = vim.bo[buf].buftype == '' and path ~= '' and vim.fn.fnamemodify(vim.fn.resolve(path), ':h')
-    or original_cwd
+  local cwd = original_cwd
+  if vim.bo[buf].buftype == '' and path ~= '' then
+    path = vim.fn.resolve(path)
+    -- `nvim .` opens a directory buffer: use it directly, not its parent.
+    cwd = vim.fn.isdirectory(path) == 1 and path or vim.fn.fnamemodify(path, ':h')
+  end
 
   local function is_current()
     if not handle.is_current() then return false end
