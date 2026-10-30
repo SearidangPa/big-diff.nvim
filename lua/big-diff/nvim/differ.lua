@@ -51,7 +51,9 @@ local function find_remote(output, repo)
 end
 
 -- The split viewer reads the working tree, not a remote head snapshot. Require
--- the PR head locally so a URL can never silently display an unrelated branch.
+-- the PR head locally so a URL can never silently display an unrelated branch;
+-- when HEAD differs, check out the PR with `gh pr checkout` if that cannot
+-- touch local work (no tracked changes, no unsaved buffers).
 -- Accepts either a PR URL string or a pre-fetched PR metadata table (from
 -- `jiragh gh branch-pull --cached` or `gh pr view --json ...`), and returns an
 -- ownership handle for async callers.
@@ -69,7 +71,7 @@ function M.open(input, opts)
   local required_bins = prefetched_pr and { 'git' } or { 'git', 'gh' }
   for _, executable in ipairs(required_bins) do
     if vim.fn.executable(executable) ~= 1 then
-      log.notify('Differ requires `' .. executable .. '` on PATH.', 'ERROR')
+      log.notify('A PR diff requires `' .. executable .. '` on PATH.', 'ERROR')
       return
     end
   end
@@ -146,7 +148,7 @@ function M.open(input, opts)
     then
       aborted = true
       request_id = request_id + 1
-      log.notify('Differ cancelled because the window, buffer, or directory changed; run it again.', 'WARN')
+      log.notify('PR diff cancelled because the window, buffer, or directory changed; run it again.', 'WARN')
       return false
     end
     return true
@@ -182,6 +184,66 @@ function M.open(input, opts)
         return
       end
       callback()
+    end)
+  end
+
+  local function unsaved_buffer()
+    local prefix = cwd .. '/'
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      local name = vim.api.nvim_buf_get_name(b)
+      if vim.bo[b].modified and vim.bo[b].buftype == '' and name ~= '' then
+        if vim.startswith(vim.fn.resolve(name), prefix) or vim.startswith(name, prefix) then return name end
+      end
+    end
+  end
+
+  -- Like check_head, but switch to the PR head with `gh pr checkout` when it is
+  -- not checked out. Provisional (cached) requests never check out.
+  local function ensure_head(pr, callback)
+    git({ 'rev-parse', 'HEAD' }, 'Could not resolve HEAD', function(head)
+      if head == pr.headRefOid then return callback() end
+      local manual = 'gh pr checkout ' .. target.url
+      if opts.provisional then
+        fail('Check out the PR head first: ' .. manual .. ' (no checkout or reset was performed).')
+        return
+      end
+      if vim.fn.executable('gh') ~= 1 then
+        fail('Check out the PR head first: ' .. manual .. ' (`gh` is not on PATH; no checkout was performed).')
+        return
+      end
+      local unsaved = unsaved_buffer()
+      if unsaved then
+        fail(
+          'Save or discard '
+            .. vim.fn.fnamemodify(unsaved, ':~:.')
+            .. ' before :Diff checks out the PR (no checkout was performed).'
+        )
+        return
+      end
+      git({ 'status', '--porcelain', '--untracked-files=no' }, 'Could not read the working tree status', function(status)
+        if status ~= '' then
+          fail('Commit or stash local changes before :Diff checks out the PR, or run: ' .. manual .. ' (no checkout was performed).')
+          return
+        end
+        log.notify('PR #' .. pr.number .. ': checking out ' .. pr.headRefName .. ' …', 'INFO')
+        run({ 'gh', 'pr', 'checkout', target.url }, 'gh pr checkout failed', function()
+          -- Reload buffers whose files the checkout changed.
+          pcall(vim.cmd.checktime)
+          git({ 'rev-parse', 'HEAD' }, 'Could not resolve HEAD', function(new_head)
+            if new_head ~= pr.headRefOid then
+              fail(
+                'After gh pr checkout, HEAD is '
+                  .. new_head:sub(1, 12)
+                  .. ' but the PR head is '
+                  .. pr.headRefOid:sub(1, 12)
+                  .. ' (the local branch differs from the PR, or the PR was just updated).'
+              )
+              return
+            end
+            callback()
+          end)
+        end)
+      end)
     end)
   end
 
@@ -242,7 +304,7 @@ function M.open(input, opts)
   git({ 'rev-parse', '--show-toplevel' }, 'Open a file in the PR repository first', function(root)
     cwd = root
     if prefetched_pr then
-      check_head(prefetched_pr, function() ensure_base(prefetched_pr) end)
+      ensure_head(prefetched_pr, function() ensure_base(prefetched_pr) end)
       return
     end
     run(
@@ -256,7 +318,7 @@ function M.open(input, opts)
           return
         end
         active_pr = pr
-        check_head(pr, function() ensure_base(pr) end)
+        ensure_head(pr, function() ensure_base(pr) end)
       end
     )
   end)

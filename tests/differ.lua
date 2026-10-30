@@ -66,6 +66,11 @@ vim.system = function(args, opts, callback)
     scenario[args[1] .. '_reply'] = callback
     return {}
   end
+  if args[1] == 'gh' and args[3] == 'checkout' then
+    if scenario.checkout then return respond(callback, scenario.checkout) end
+    -- Simulate gh pr checkout: switch the clone back to the PR branch.
+    return system({ 'git', 'checkout', '--quiet', 'feature' }, opts, callback)
+  end
   if args[1] == 'gh' then
     if scenario.change_buffer then vim.cmd.enew() end
     if scenario.delay_gh then
@@ -124,9 +129,9 @@ local function error_contains(needle)
   )
 end
 
-local function find_call(subcommand)
+local function find_call(subcommand, program)
   for _, call in ipairs(calls) do
-    if call.args[1] == 'git' and call.args[2] == subcommand then return call end
+    if call.args[1] == (program or 'git') and call.args[program and 3 or 2] == subcommand then return call end
   end
 end
 
@@ -152,10 +157,11 @@ local ok, err = xpcall(function()
   local base = commit('base advanced')
   pr = { number = 1944, baseRefName = 'release/6.3.3', baseRefOid = base, headRefName = 'feature', headRefOid = head }
 
-  test('registers Differ without changing Diff commit/count behavior', function()
+  test('Diff takes PR URLs without changing its commit/count behavior', function()
     prepare()
     local commands = vim.api.nvim_get_commands({})
-    eq('1', commands.Differ.nargs)
+    eq('?', commands.Diff.nargs)
+    eq(nil, commands.Differ)
     vim.cmd('Diff commit')
     vim.cmd('Diff 3')
     eq({ 'HEAD~1', 'HEAD~3' }, opened)
@@ -164,7 +170,7 @@ local ok, err = xpcall(function()
   test('fetches missing non-main base and opens merge-base, not base tip or main', function()
     prepare()
     local before = git({ 'show-ref' }, checkout)
-    vim.cmd('Differ ' .. url)
+    vim.cmd('Diff ' .. url)
     assert(vim.wait(10000, done, 5), 'Timed out')
     eq({ merge_base }, opened)
     eq({ 'git', 'fetch', '--no-tags', '--no-write-fetch-head', '--', 'origin', base }, find_call('fetch').args)
@@ -218,13 +224,64 @@ local ok, err = xpcall(function()
     eq({ merge_base }, opened)
   end)
 
-  test('rejects a different checked-out HEAD without fetching or checking out', function()
+  test('checks out the PR head automatically when HEAD differs', function()
     prepare()
     git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
     invoke()
-    error_contains('gh pr checkout ' .. url)
+    eq({ merge_base }, opened)
+    eq({ 'gh', 'pr', 'checkout', url }, find_call('checkout', 'gh').args)
+    eq(head, git({ 'rev-parse', 'HEAD' }, checkout))
+  end)
+
+  test('checks out prefetched (cached) PRs too, but never provisional ones', function()
+    prepare({ have_base = true })
+    git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
+    local cached = vim.tbl_extend('force', pr, { url = url })
+    differ.open(cached, { provisional = true })
+    vim.wait(200, function() return #opened > 0 end, 5)
+    eq({}, opened)
+    eq(nil, find_call('checkout', 'gh'))
+    eq(merge_base, git({ 'rev-parse', 'HEAD' }, checkout))
+    invoke(cached)
+    eq({ merge_base }, opened)
+    eq(head, git({ 'rev-parse', 'HEAD' }, checkout))
+  end)
+
+  test('does not check out over uncommitted tracked changes', function()
+    prepare()
+    git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
+    file(checkout .. '/release.txt', 'local edit')
+    invoke()
+    error_contains('Commit or stash local changes')
+    eq(nil, find_call('checkout', 'gh'))
     eq(nil, find_call('fetch'))
     eq(merge_base, git({ 'rev-parse', 'HEAD' }, checkout))
+  end)
+
+  test('does not check out with unsaved buffers in the repository', function()
+    prepare()
+    git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
+    vim.cmd.edit({ vim.fn.fnameescape(checkout .. '/file.txt'), bang = true })
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'unsaved' })
+    invoke()
+    error_contains('Save or discard')
+    eq(nil, find_call('checkout', 'gh'))
+    vim.cmd.edit({ bang = true })
+  end)
+
+  test('reports gh pr checkout failures', function()
+    prepare({ checkout = { code = 1, stderr = 'branch diverged' } })
+    git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
+    invoke()
+    error_contains('gh pr checkout failed: branch diverged')
+    eq(merge_base, git({ 'rev-parse', 'HEAD' }, checkout))
+  end)
+
+  test('reports a HEAD that still differs after checkout', function()
+    prepare({ checkout = {} })
+    git({ 'checkout', '--quiet', '--detach', merge_base }, checkout)
+    invoke()
+    error_contains('After gh pr checkout, HEAD is ' .. merge_base:sub(1, 12))
   end)
 
   test('detects a checkout that changed during the fetch', function()
@@ -327,7 +384,7 @@ local ok, err = xpcall(function()
   test('does not open a diff in a buffer selected while gh was running', function()
     prepare({ change_buffer = true })
     invoke()
-    error_contains('Differ cancelled')
+    error_contains('PR diff cancelled')
   end)
 
   test('ignores stale responses after a newer invocation', function()
@@ -426,7 +483,7 @@ local ok, err = xpcall(function()
         end, 5),
         'Initial reference text was not loaded'
       )
-      vim.cmd('Differ ' .. url)
+      vim.cmd('Diff ' .. url)
       assert(
         vim.wait(10000, function()
           local data = core.get_buf_data(buf)

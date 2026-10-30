@@ -150,13 +150,15 @@ MiniDiff.setup = function(config)
     local argument = cmd_opts.args
     if argument == '' then return split.toggle() end
 
+    -- A URL is a GitHub PR: diff against its actual base, checking it out if needed.
+    if argument:match('^https?://') then return require('big-diff.nvim.differ').open(argument) end
+
     if argument == 'commit' then argument = '1' end
     split.open(argument:match('^%d+$') and ('HEAD~' .. argument) or argument)
-  end, { nargs = '?', desc = 'Open a split diff against a ref, HEAD~N, or `commit` (HEAD~1); no argument toggles' })
-
-  vim.api.nvim_create_user_command('Differ', function(cmd_opts)
-    require('big-diff.nvim.differ').open(cmd_opts.args)
-  end, { nargs = 1, desc = 'Open a checked-out GitHub PR diff against its actual base' })
+  end, {
+    nargs = '?',
+    desc = 'Open a split diff against a ref, HEAD~N, `commit` (HEAD~1), or a GitHub PR URL; no argument toggles',
+  })
 
   -- Register decoration provider
   H.viz.set_decoration_provider(H.state.ns_id.viz, H.state.ns_id.overlay)

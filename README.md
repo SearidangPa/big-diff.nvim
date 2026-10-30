@@ -14,7 +14,7 @@ Pickers use [snacks.nvim](https://github.com/folke/snacks.nvim) (`Snacks.picker`
 ```lua
 local diff = require('big-diff.nvim')
 diff.setup({
-  -- Follow the split view's selected base (needed by `:Diff` and `:Differ`)
+  -- Follow the split view's selected base (needed by `:Diff`)
   source = diff.gen_source.git({
     ref = function() return vim.g.minidiff_git_base_ref or 'HEAD' end,
   }),
@@ -41,7 +41,7 @@ diff.setup({
 ```
 
 Commands become available after `setup()`; lazy-loading configurations can use
-`Diff` and `Differ` as command triggers.
+`Diff` as a command trigger.
 
 Preview styles:
 
@@ -57,7 +57,7 @@ Preview styles:
 - `:Diff <ref>` - open the split view against any Git revision (`main`,
   `origin/main`, a SHA).
 - `:Diff N` - against `HEAD~N`; `:Diff commit` is `HEAD~1`.
-- `:Differ <pr-url>` - against a GitHub PR's actual base (below).
+- `:Diff <pr-url>` - against a GitHub PR's actual base (below).
 - `:FoldBetweenHunk [context]` - fold unchanged regions.
 
 ## Split view
@@ -87,13 +87,13 @@ The default base branch is `origin/HEAD`, then the upstream branch, then `main`.
 
 ## Pull request diffs
 
-Check out the PR in its local repository, then open a file in Neovim and run:
+Open a file from the PR's local repository in Neovim and run:
 
 ```vim
-:Differ https://github.com/PreVeil/drive/pull/1944
+:Diff https://github.com/PreVeil/drive/pull/1944
 ```
 
-This PR targets `release/6.3.3`, not `main`. `:Differ` reads the actual base
+This PR targets `release/6.3.3`, not `main`. `:Diff` reads the actual base
 and head commits using `gh`, fetches the base commit if missing, and opens the
 split view against their **merge-base**, matching GitHub's three-dot
 comparison.
@@ -101,8 +101,11 @@ comparison.
 Requirements:
 
 - Git and an authenticated GitHub CLI (`gh auth login`).
-- Local `HEAD` must match the PR head. If it does not, the command tells you to
-  run `gh pr checkout <url>`; it never checks out, resets, or overwrites files.
+- Local `HEAD` must match the PR head. If it does not, `:Diff` runs
+  `gh pr checkout <url>` for you, but only when there are no uncommitted
+  tracked changes and no unsaved buffers in the repository; otherwise it stops
+  and tells you why. It never resets or overwrites files. Cached
+  (`provisional`) previews never check out.
 - If the base commit is missing, a remote for the PR's base repository is needed.
   HTTPS and GitHub SSH remotes are supported, including an `upstream` remote for
   fork PRs. Fetching does not move local branches or remote-tracking refs.
@@ -112,7 +115,7 @@ This is a **working-tree view**: local edits and untracked files are included.
 The file tree also keeps its current-directory filtering. Use a clean checkout
 and the repository root to see the entire PR without local changes.
 
-`require('big-diff.nvim.differ').open(url)` uses the same path as `:Differ`
+`require('big-diff.nvim.differ').open(url)` uses the same path as `:Diff <pr-url>`
 and returns an ownership handle: `is_current()`, `has_view()`, and
 `cancel(close_view)`. This lets cache/background lookups replace or dismiss
 only their own preview. Closing the view or opening another diff invalidates

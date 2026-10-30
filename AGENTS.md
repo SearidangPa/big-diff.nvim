@@ -1,6 +1,6 @@
 ## Layout
 
-- `lua/big-diff/nvim/` - inline diffs (a mini.diff fork), `:Diff`/`:Differ`,
+- `lua/big-diff/nvim/` - inline diffs (a mini.diff fork), `:Diff` (refs and PR URLs),
   the split view (`split/`), the git hunk picker (`picker/`) and the jumplist
   picker. Code follows mini.nvim's style: 2 spaces, single quotes.
 
