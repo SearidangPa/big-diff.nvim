@@ -554,21 +554,41 @@ M.create_default_hl = function()
     hi_overlay('MiniDiffOverChangeBuf', { bg = '#CFE6BB' })
   end
 
-  -- Split view file tree
+  -- File tree status is foreground-only. Only the open file gets a background;
+  -- do not reuse the code overlay groups here.
+  local normal = vim.api.nvim_get_hl(0, { name = 'Normal', link = false })
+  local foreground = normal.fg or (is_dark and 0xdcd7ba or 0x343b58)
+  local background = normal.bg or (is_dark and 0x1f1f28 or 0xfafafa)
+  local fg = function(name, fallback)
+    return vim.api.nvim_get_hl(0, { name = name, link = false }).fg or fallback
+  end
+  local accent = fg('DiagnosticInfo', is_dark and 0x7fb4ca or 0x276983)
+  local muted = fg('Comment', is_dark and 0x9292a0 or 0x686878)
+  local selected_bg = 0
+  for _, factor in ipairs({ 0x10000, 0x100, 1 }) do
+    local base = math.floor(background / factor) % 256
+    local tint = math.floor(accent / factor) % 256
+    selected_bg = selected_bg + math.floor(base * 0.88 + tint * 0.12) * factor
+  end
   hi_overlay('BigDiffFileName', { fg = is_dark and '#3E8FB0' or '#276983' })
-  hi_overlay('BigDiffDir', { fg = is_dark and '#9CCFD9' or '#1EAC85' })
-  hi_overlay('BigDiffUntracked', { bg = is_dark and '#4F4626' or '#FEFEF9' })
+  hi_overlay('BigDiffTreeNormal', { link = 'Normal' })
+  hi_overlay('BigDiffTreeFile', { fg = foreground })
+  hi_overlay('BigDiffDir', { fg = muted, bold = true })
+  hi_overlay('BigDiffTreeGuide', { fg = fg('NonText', muted) })
+  hi_overlay('BigDiffTreeCount', { fg = muted })
+  hi_overlay('BigDiffTreeHeader', { fg = foreground, bold = true })
+  hi_overlay('BigDiffTreeCurrent', { bg = selected_bg })
+  hi_overlay('BigDiffTreeCurrentFile', { fg = accent, bold = true })
+  hi_overlay('BigDiffTreeAdded', { fg = fg('DiagnosticOk', is_dark and 0x98bb6c or 0x587539) })
+  hi_overlay('BigDiffTreeModified', { fg = fg('DiagnosticWarn', is_dark and 0xe6c384 or 0x8f5e15) })
+  hi_overlay('BigDiffTreeRemoved', { fg = fg('DiagnosticError', is_dark and 0xe46876 or 0xc34043) })
+  hi_overlay('BigDiffTreeRenamed', { fg = accent })
+  hi_overlay('BigDiffTreeConflict', { fg = fg('DiagnosticError', 0xc34043), bold = true })
+  hi_overlay('BigDiffUntracked', { fg = accent })
   hi_overlay('BigDiffDeleted', { link = 'MiniDiffOverDelete' })
-
-  -- "Tests hidden" badge in the file tree winbar
-  local badge_accent = is_dark and '#f6c177' or '#ea9d34'
-  local badge_body = is_dark and '#26233a' or '#f2e9e1'
-  local badge_ink = is_dark and '#191724' or '#faf4ed'
-  hi_overlay('BigDiffTreeWinBar', { link = 'Normal' })
-  hi_overlay('BigDiffTestsHiddenCap', { fg = badge_accent })
-  hi_overlay('BigDiffTestsHiddenIcon', { fg = badge_ink, bg = badge_accent, bold = true })
-  hi_overlay('BigDiffTestsHidden', { fg = badge_accent, bg = badge_body, bold = true })
-  hi_overlay('BigDiffTestsHiddenEndCap', { fg = badge_body })
+  hi_overlay('BigDiffTreeWinBar', { fg = foreground, bg = normal.bg })
+  hi_overlay('BigDiffTreeStatusLine', { fg = muted, bg = normal.bg })
+  hi_overlay('BigDiffTestsHidden', { fg = muted })
 
   -- Picker preview groups derive from the colorscheme, so refresh them once loaded
   local render = package.loaded['big-diff.nvim.picker.render']

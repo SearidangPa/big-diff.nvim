@@ -62,11 +62,25 @@ Preview styles:
 
 ## Split view
 
-- the left window lists changed files grouped by directory; `<CR>` opens one in
-  the main window
+- the left window groups changed files by full directory path, with file counts
+  and a content-aware width (36–48 columns when space allows)
+- filenames keep their extensions; long names use a single middle ellipsis,
+  preserving the distinguishing suffix
+- only the currently open file has a row background; Git status is a colored
+  `M`, `A`, `D`, `R`, `C`, `T`, `U`, or `?` marker
+- the header shows the file count and test filter; the local statusline shows
+  the file path under the tree cursor (subject to your `laststatus` setting)
 - untracked files are included
 - deleted files open in a scratch buffer with their content from the base ref
 - if nothing changed against the base, it notifies and closes
+
+| key | action |
+| --- | ------ |
+| `<CR>` | Open file in the main window, or toggle a directory |
+| `h` / `l` | Collapse / expand directory |
+| `zM` / `zR` | Collapse / expand all directories |
+| `<Tab>` | Hide / show test files |
+| `g?` | Show tree keybindings |
 
 ```lua
 local split = require('big-diff.nvim.split')
@@ -187,9 +201,10 @@ jumplist.pick_buffer() -- jumps in the current buffer
 ## Tests
 
 ```sh
-nvim --headless -u NONE -l tests/differ.lua
+make test
 ```
 
-This covers the real split view, overlay, and view cleanup. Set
+This covers the real split view, overlay, view cleanup, tree layout, status and
+selection highlights, folding, Unicode truncation, and resizing. Set
 `NVIM_CONFIG_RTP=/absolute/path/to/nvim` to also exercise the personal
 `<leader>dp` cache/GitHub race against the real view.

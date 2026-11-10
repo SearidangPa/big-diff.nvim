@@ -111,7 +111,7 @@ local function render_file_tree()
     state.main_win = vim.api.nvim_get_current_win()
   end
 
-  local buffer_number, window_number = ui.create_split_buffer()
+  local buffer_number, window_number = ui.create_split_buffer(state.files)
   state.buffer_number = buffer_number
   state.window_number = window_number
 
@@ -125,10 +125,9 @@ local function render_file_tree()
     end,
   })
 
-  ui.render_tests_hidden_badge(window_number, state.exclude_tests and (#state.all_files - #state.files) or nil)
-
-  local line_to_file_index, apply_line_highlights, highlight_current_file =
-    ui.render_files(buffer_number, window_number, state.files, state.git_root, state.main_win)
+  local hidden_count = state.exclude_tests and (#state.all_files - #state.files) or nil
+  local line_to_file_index, highlight_current_file =
+    ui.render_files(buffer_number, window_number, state.files, state.git_root, state.main_win, hidden_count)
 
   local navigation = ui.setup_keymaps(
     buffer_number,
@@ -138,7 +137,6 @@ local function render_file_tree()
     state.main_win,
     state.base,
     line_to_file_index,
-    apply_line_highlights,
     highlight_current_file,
     git.open_file_in_main_win,
     M.toggle_exclude_tests

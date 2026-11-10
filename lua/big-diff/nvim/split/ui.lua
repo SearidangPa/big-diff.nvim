@@ -1,182 +1,221 @@
 local M = {}
-local truncate = require('big-diff.nvim.utils_truncate')
+local tree = require('big-diff.nvim.split.tree')
 
 local highlight_ns = vim.api.nvim_create_namespace('MiniDiffHighlight')
 local current_line_ns = vim.api.nvim_create_namespace('MiniDiffHighlightCurrent')
 
-function M.create_split_buffer()
+local function find_current_file_index(files, git_root, main_win)
+  if not main_win or not vim.api.nvim_win_is_valid(main_win) then return end
+  local buf = vim.api.nvim_win_get_buf(main_win)
+  local ok, diff_path = pcall(vim.api.nvim_buf_get_var, buf, 'big_diff_split_path')
+  local current_path = vim.api.nvim_buf_get_name(buf)
+  for index, entry in ipairs(files) do
+    local path = type(entry) == 'table' and entry.path or entry
+    if ok and diff_path ~= '' then
+      if path == diff_path then return index end
+    elseif current_path ~= '' and not (type(entry) == 'table' and entry.status == 'D') then
+      local absolute_path = vim.fs.normalize(git_root .. '/' .. path)
+      if vim.fn.resolve(absolute_path) == vim.fn.resolve(vim.fs.normalize(current_path)) then return index end
+    end
+  end
+end
+
+local function reveal_file(window_number, line)
+  if not line or not vim.api.nvim_win_is_valid(window_number) then return end
+  vim.api.nvim_win_call(window_number, function()
+    vim.api.nvim_win_set_cursor(window_number, { line, 0 })
+    vim.cmd('silent! normal! zv')
+  end)
+end
+
+function M.create_split_buffer(files)
+  local width = tree.preferred_width(files or {}, vim.api.nvim_win_get_width(0))
   vim.cmd('topleft vnew')
   local buffer_number = vim.api.nvim_get_current_buf()
   local window_number = vim.api.nvim_get_current_win()
 
-  -- Buffer options
   vim.bo[buffer_number].buftype = 'nofile'
   vim.bo[buffer_number].bufhidden = 'wipe'
   vim.bo[buffer_number].swapfile = false
   vim.bo[buffer_number].filetype = 'minidiff'
+  vim.bo[buffer_number].buflisted = false
 
-  -- Window options
-  vim.wo[window_number].number = false
-  vim.wo[window_number].relativenumber = false
-  vim.wo[window_number].signcolumn = 'no'
-  vim.wo[window_number].foldcolumn = '0'
-  vim.wo[window_number].winfixwidth = true
-
-  local width = math.floor(vim.o.columns * 0.15)
+  local options = {
+    number = false,
+    relativenumber = false,
+    signcolumn = 'no',
+    statuscolumn = '',
+    foldcolumn = '0',
+    winfixwidth = true,
+    wrap = false,
+    list = false,
+    spell = false,
+    cursorline = false,
+    cursorcolumn = false,
+    colorcolumn = '',
+    foldmethod = 'manual',
+    foldenable = true,
+    foldlevel = 99,
+    foldtext = "substitute(getline(v:foldstart), '▾', '▸', '')",
+    winhighlight = table.concat({
+      'Normal:BigDiffTreeNormal',
+      'NormalNC:BigDiffTreeNormal',
+      'WinBar:BigDiffTreeWinBar',
+      'WinBarNC:BigDiffTreeWinBar',
+      'StatusLine:BigDiffTreeStatusLine',
+      'StatusLineNC:BigDiffTreeStatusLine',
+      'Folded:BigDiffDir',
+      'CursorLine:BigDiffTreeNormal',
+      'CursorColumn:BigDiffTreeNormal',
+      'EndOfBuffer:BigDiffTreeNormal',
+    }, ','),
+  }
+  for name, value in pairs(options) do
+    vim.wo[window_number][name] = value
+  end
+  vim.opt_local.fillchars:append({ fold = ' ', eob = ' ' })
   vim.api.nvim_win_resize(window_number, width, -1)
 
   return buffer_number, window_number
 end
 
--- Pin a pill-shaped "tests hidden" badge to the tree's winbar, or clear it
--- when hidden_count is nil.
-function M.render_tests_hidden_badge(window_number, hidden_count)
-  if hidden_count == nil then
-    vim.wo[window_number].winbar = ''
-    return
+function M.render_header(window_number, count, hidden_count)
+  local width = vim.api.nvim_win_get_width(window_number)
+  local label = width < 32 and 'FILES' or 'CHANGED FILES'
+  local hidden = ''
+  if hidden_count ~= nil then
+    hidden = width < 32 and (' · ' .. hidden_count .. ' hidden')
+      or (' · ' .. hidden_count .. (hidden_count == 1 and ' test hidden' or ' tests hidden'))
   end
-
-  local label = hidden_count == 1 and '1 test hidden' or (hidden_count .. ' tests hidden')
-  -- Blend the winbar into the tree so the rounded caps sit on its background
-  vim.wo[window_number].winhighlight = 'WinBar:BigDiffTreeWinBar,WinBarNC:BigDiffTreeWinBar'
   vim.wo[window_number].winbar = table.concat({
-    '%#BigDiffTestsHiddenCap#\u{E0B6}', -- rounded left cap
-    '%#BigDiffTestsHiddenIcon#\u{F0209} ', -- nf-md-eye_off
-    '%#BigDiffTestsHidden# ',
+    '%#BigDiffTreeHeader# ',
     label,
-    ' %#BigDiffTestsHiddenEndCap#\u{E0B4}', -- rounded right cap
-    '%#BigDiffTreeWinBar#',
+    '%#BigDiffTestsHidden#',
+    hidden,
+    '%#BigDiffTreeCount#%=',
+    tostring(count),
+    ' ',
   })
 end
 
-function M.render_files(buffer_number, window_number, files, git_root, main_win)
-  local width = vim.api.nvim_win_get_width(window_number) - 2
-  local lines = {}
+function M.render_files(buffer_number, window_number, files, git_root, main_win, hidden_count)
   local line_to_file_index = {}
-  local current_line = nil
-  local groups = {}
-  local group_names = {}
+  local layout, current_line, rendered_width
+  local current_index = find_current_file_index(files, git_root, main_win)
 
-  local current_buf = vim.api.nvim_get_current_buf()
-  if main_win and vim.api.nvim_win_is_valid(main_win) then current_buf = vim.api.nvim_win_get_buf(main_win) end
-  local current_path = nil
-  local current_is_diff_path = false
-  local ok, diff_path = pcall(vim.api.nvim_buf_get_var, current_buf, 'big_diff_split_path')
-  if ok and diff_path and diff_path ~= '' then
-    current_path = diff_path
-    current_is_diff_path = true
-  else
-    local current_file = vim.api.nvim_buf_get_name(current_buf)
-    if current_file ~= '' then current_path = vim.fs.normalize(current_file) end
+  local function update_footer()
+    local row = layout.rows[vim.api.nvim_win_get_cursor(window_number)[1]]
+    local path = row and row.file_index and row.path
+    if not path and current_line then path = layout.rows[current_line].path end
+    local label = path and vim.fn.strtrans(path) or 'Enter open · h/l fold · Tab tests'
+    -- Filenames can contain statusline directives.
+    vim.wo[window_number].statusline = '%#BigDiffTreeStatusLine# %<' .. label:gsub('%%', '%%%%') .. ' '
   end
 
-  for i, entry in ipairs(files) do
-    local file = type(entry) == 'table' and entry.path or entry
-    local parent = vim.fn.fnamemodify(file, ':h')
-    local group = parent == '.' and '.' or vim.fn.fnamemodify(parent, ':t')
-    if not groups[group] then
-      groups[group] = {}
-      table.insert(group_names, group)
-    end
-    table.insert(groups[group], {
-      index = i,
-      path = file,
-      status = entry.status,
-      untracked = entry.untracked,
-    })
-  end
-
-  local highlights = {}
-
-  for _, group in ipairs(group_names) do
-    local group_display = truncate.truncate_middle(group, { no_truncate_max = width })
-    table.insert(lines, group_display)
-    line_to_file_index[#lines] = false
-    highlights[#lines] = 'BigDiffDir'
-
-    local group_entries = groups[group]
-    for entry_index, entry in ipairs(group_entries) do
-      local basename = vim.fn.fnamemodify(entry.path, ':t:r')
-      local prefix
-      if entry_index == #group_entries then
-        prefix = '└╴ '
-      else
-        prefix = '├╴ '
-      end
-
-      local max_width = math.max(0, width - #prefix)
-      local display_basename = basename
-      if basename:find('_', 1, true) then
-        display_basename = truncate.truncate_middle(basename, { no_truncate_max = max_width })
-      end
-      local display = prefix .. display_basename
-      table.insert(lines, display)
-      line_to_file_index[#lines] = entry.index
-      if entry.untracked then
-        highlights[#lines] = 'BigDiffUntracked'
-      elseif entry.status == 'A' then
-        highlights[#lines] = 'MiniDiffOverAdd'
-      else
-        highlights[#lines] = 'Comment'
-      end
-
-      -- Check if this is the current file
-      if current_path then
-        if current_is_diff_path then
-          if entry.path == current_path then current_line = #lines end
-        else
-          local absolute_path = vim.fs.normalize(git_root .. '/' .. entry.path)
-          if vim.fn.resolve(absolute_path) == vim.fn.resolve(current_path) then current_line = #lines end
+  local function apply_line_highlights()
+    vim.api.nvim_buf_clear_namespace(buffer_number, highlight_ns, 0, -1)
+    for line_nr, row in ipairs(layout.rows) do
+      for _, span in ipairs(row.highlights) do
+        if span[2] > span[1] then
+          vim.api.nvim_buf_set_extmark(buffer_number, highlight_ns, line_nr - 1, span[1], {
+            end_col = span[2],
+            hl_group = span[3],
+          })
         end
       end
     end
   end
-
-  vim.bo[buffer_number].modifiable = true
-  vim.api.nvim_buf_set_lines(buffer_number, 0, -1, false, lines)
-  vim.bo[buffer_number].modifiable = false
-
-  local function apply_line_highlights()
-    vim.api.nvim_buf_clear_namespace(buffer_number, highlight_ns, 0, -1)
-    for line_nr, hl_group in ipairs(highlights) do
-      local line = lines[line_nr] or ''
-      vim.api.nvim_buf_set_extmark(buffer_number, highlight_ns, line_nr - 1, 0, {
-        hl_group = hl_group,
-        end_row = line_nr - 1,
-        end_col = #line,
-      })
-    end
-  end
-
-  apply_line_highlights()
 
   local function highlight_current_file(line_override)
     if line_override == false then
       current_line = nil
-      vim.api.nvim_buf_clear_namespace(buffer_number, current_line_ns, 0, -1)
-      return
+    elseif line_override then
+      current_line = line_override
     end
-    local highlight_line = line_override or current_line
-    if not highlight_line then
-      for line_nr, file_index in ipairs(line_to_file_index) do
-        if file_index then
-          highlight_line = line_nr
-          break
-        end
+    vim.api.nvim_buf_clear_namespace(buffer_number, current_line_ns, 0, -1)
+    local row = current_line and layout.rows[current_line]
+    current_index = row and row.file_index or nil
+    if row and row.file_index then
+      vim.api.nvim_buf_set_extmark(buffer_number, current_line_ns, current_line - 1, 0, {
+        line_hl_group = 'BigDiffTreeCurrent',
+        virt_text = { { '›', 'BigDiffTreeCurrentFile' } },
+        virt_text_win_col = 1,
+        virt_text_pos = 'overlay',
+        hl_mode = 'combine',
+        priority = 210,
+      })
+      if row.filename_col < #layout.lines[current_line] then
+        vim.api.nvim_buf_set_extmark(buffer_number, current_line_ns, current_line - 1, row.filename_col, {
+          end_col = #layout.lines[current_line],
+          hl_group = 'BigDiffTreeCurrentFile',
+          hl_mode = 'combine',
+          priority = 211,
+        })
       end
     end
-    if highlight_line then
-      current_line = highlight_line
-      vim.api.nvim_buf_clear_namespace(buffer_number, current_line_ns, 0, -1)
-      vim.api.nvim_buf_set_extmark(buffer_number, current_line_ns, highlight_line - 1, 0, {
-        line_hl_group = 'BigDiffFileName',
-      })
-    end
+    update_footer()
   end
 
-  highlight_current_file()
+  local function render()
+    local closed = {}
+    local view = vim.api.nvim_win_call(window_number, function()
+      for _, group in ipairs(layout and layout.groups or {}) do
+        if vim.fn.foldclosed(group.first) ~= -1 then closed[group.path] = true end
+      end
+      return vim.fn.winsaveview()
+    end)
 
-  return line_to_file_index, apply_line_highlights, highlight_current_file
+    rendered_width = vim.api.nvim_win_get_width(window_number)
+    layout = tree.layout(files, rendered_width)
+    for line in pairs(line_to_file_index) do
+      line_to_file_index[line] = nil
+    end
+    for line, file_index in ipairs(layout.line_to_file_index) do
+      line_to_file_index[line] = file_index
+      if file_index == current_index then current_line = line end
+    end
+    vim.bo[buffer_number].modifiable = true
+    vim.api.nvim_buf_set_lines(buffer_number, 0, -1, false, layout.lines)
+    vim.bo[buffer_number].modifiable = false
+    apply_line_highlights()
+    M.render_header(window_number, #files, hidden_count)
+
+    vim.api.nvim_win_call(window_number, function()
+      vim.cmd('silent! normal! zE')
+      for _, group in ipairs(layout.groups) do
+        vim.cmd(string.format('%d,%dfold', group.first, group.last))
+      end
+      vim.cmd('silent! normal! zR')
+      for _, group in ipairs(layout.groups) do
+        if closed[group.path] then
+          vim.api.nvim_win_set_cursor(window_number, { group.first, 0 })
+          vim.cmd('silent! normal! zc')
+        end
+      end
+      vim.fn.winrestview(view)
+    end)
+    highlight_current_file()
+  end
+
+  render()
+
+  local group = vim.api.nvim_create_augroup('BigDiffTreeLayout' .. buffer_number, { clear = true })
+  vim.api.nvim_create_autocmd({ 'WinResized', 'VimResized' }, {
+    group = group,
+    callback = function()
+      if vim.api.nvim_win_is_valid(window_number) and vim.api.nvim_win_get_width(window_number) ~= rendered_width then
+        render()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd('CursorMoved', { group = group, buffer = buffer_number, callback = update_footer })
+  vim.api.nvim_create_autocmd('BufWipeout', {
+    group = group,
+    buffer = buffer_number,
+    callback = function() pcall(vim.api.nvim_del_augroup_by_id, group) end,
+  })
+
+  return line_to_file_index, highlight_current_file
 end
 
 function M.setup_keymaps(
@@ -187,16 +226,13 @@ function M.setup_keymaps(
   main_win,
   base,
   line_to_file_index,
-  apply_line_highlights,
   highlight_current_file,
   open_file_in_main_win,
   toggle_exclude_tests
 )
-  local open_next_file
-  local open_previous_file
-
-  local file_sequence = {}
-  local file_sequence_pos = {}
+  local sync_current_file
+  local synced_index
+  local file_sequence, file_sequence_pos = {}, {}
   for _, index in ipairs(line_to_file_index) do
     if index and not file_sequence_pos[index] then
       file_sequence_pos[index] = #file_sequence + 1
@@ -211,17 +247,10 @@ function M.setup_keymaps(
   end
 
   local function open_file_by_index(file_index)
-    local file_entry = file_index and files[file_index]
-    if not file_entry then return end
-    if not vim.api.nvim_win_is_valid(main_win) then return end
-
-    open_file_in_main_win(base, git_root, file_entry, main_win)
-
-    if vim.api.nvim_buf_is_valid(buffer_number) then
-      apply_line_highlights()
-      local highlight_line = file_index_to_line(file_index)
-      if highlight_line then highlight_current_file(highlight_line) end
-    end
+    local entry = file_index and files[file_index]
+    if not entry or not vim.api.nvim_win_is_valid(main_win) then return end
+    -- Wait for the actual buffer switch: the tree cursor is not the open file.
+    open_file_in_main_win(base, git_root, entry, main_win, sync_current_file)
   end
 
   if toggle_exclude_tests then
@@ -232,49 +261,36 @@ function M.setup_keymaps(
     })
   end
 
-  -- Open file on Enter
   vim.keymap.set('n', '<CR>', function()
-    local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-    local file_index = line_to_file_index[line_nr]
-    open_file_by_index(file_index)
-  end, { buffer = buffer_number, nowait = true })
+    local line = vim.api.nvim_win_get_cursor(0)[1]
+    if line_to_file_index[line] then
+      open_file_by_index(line_to_file_index[line])
+    elseif vim.fn.foldlevel(line) > 0 then
+      vim.cmd('silent! normal! za')
+    end
+  end, { buffer = buffer_number, nowait = true, desc = 'Open file or toggle directory' })
+  vim.keymap.set('n', 'h', '<Cmd>silent! normal! zc<CR>', { buffer = buffer_number, desc = 'Collapse directory' })
+  vim.keymap.set('n', 'l', '<Cmd>silent! normal! zo<CR>', { buffer = buffer_number, desc = 'Expand directory' })
+  vim.keymap.set(
+    'n',
+    'g?',
+    function()
+      vim.notify(table.concat({
+        'Enter: open file / toggle directory',
+        'h/l: collapse / expand · zM/zR: collapse / expand all',
+        'Tab: toggle test files',
+      }, '\n'))
+    end,
+    { buffer = buffer_number, desc = 'File tree help' }
+  )
 
-  local function find_current_file_index()
-    local current_bufnr = vim.api.nvim_win_get_buf(main_win)
-    local ok, diff_path = pcall(vim.api.nvim_buf_get_var, current_bufnr, 'big_diff_split_path')
-    if ok and diff_path and diff_path ~= '' then
-      for i, entry in ipairs(files) do
-        local entry_path = type(entry) == 'table' and entry.path or entry
-        if entry_path == diff_path then return i end
-      end
-      return nil
-    end
-    local current_path = vim.api.nvim_buf_get_name(current_bufnr)
-    if current_path == '' then return nil end
-    for i, entry in ipairs(files) do
-      local entry_path = type(entry) == 'table' and entry.path or entry
-      local entry_status = type(entry) == 'table' and entry.status or nil
-      if entry_status ~= 'D' then
-        local absolute_path = vim.fs.normalize(git_root .. '/' .. entry_path)
-        local normalized_current = vim.fs.normalize(current_path)
-        if vim.fn.resolve(absolute_path) == vim.fn.resolve(normalized_current) then return i end
-      end
-    end
-  end
-
-  local function sync_current_file()
-    if not vim.api.nvim_win_is_valid(main_win) then return end
-    if not vim.api.nvim_buf_is_valid(buffer_number) then return end
-    local current_index = find_current_file_index()
-    if not current_index then
-      highlight_current_file(false)
-      return
-    end
-    local line_nr = file_index_to_line(current_index)
-    if line_nr then
-      highlight_current_file(line_nr)
-      if vim.api.nvim_win_is_valid(window_number) then vim.api.nvim_win_set_cursor(window_number, { line_nr, 0 }) end
-    end
+  sync_current_file = function()
+    if not vim.api.nvim_win_is_valid(main_win) or not vim.api.nvim_buf_is_valid(buffer_number) then return end
+    local index = find_current_file_index(files, git_root, main_win)
+    local line = index and file_index_to_line(index)
+    highlight_current_file(line or false)
+    if line and index ~= synced_index then reveal_file(window_number, line) end
+    synced_index = index
   end
 
   local sync_group = vim.api.nvim_create_augroup('BigDiffSplitSync' .. buffer_number, { clear = true })
@@ -288,39 +304,19 @@ function M.setup_keymaps(
     callback = function() pcall(vim.api.nvim_del_augroup_by_id, sync_group) end,
   })
 
-  open_next_file = function()
+  local function step_file(direction)
     if #file_sequence == 0 then return end
-
-    local current_index = find_current_file_index()
-    local pos = current_index and file_sequence_pos[current_index] or nil
-    local next_pos = pos and (pos + 1) or 1
-    if next_pos > #file_sequence then next_pos = 1 end
+    local index = find_current_file_index(files, git_root, main_win)
+    local pos = index and file_sequence_pos[index]
+    local next_pos = pos and ((pos - 1 + direction) % #file_sequence + 1) or (direction == 1 and 1 or #file_sequence)
     local next_index = file_sequence[next_pos]
     open_file_by_index(next_index)
-    local line_nr = file_index_to_line(next_index)
-    if line_nr and vim.api.nvim_win_is_valid(window_number) then
-      vim.api.nvim_win_set_cursor(window_number, { line_nr, 0 })
-    end
-  end
-
-  open_previous_file = function()
-    if #file_sequence == 0 then return end
-
-    local current_index = find_current_file_index()
-    local pos = current_index and file_sequence_pos[current_index] or nil
-    local prev_pos = pos and (pos - 1) or #file_sequence
-    if prev_pos < 1 then prev_pos = #file_sequence end
-    local prev_index = file_sequence[prev_pos]
-    open_file_by_index(prev_index)
-    local line_nr = file_index_to_line(prev_index)
-    if line_nr and vim.api.nvim_win_is_valid(window_number) then
-      vim.api.nvim_win_set_cursor(window_number, { line_nr, 0 })
-    end
+    reveal_file(window_number, file_index_to_line(next_index))
   end
 
   return {
-    open_next_file = open_next_file,
-    open_previous_file = open_previous_file,
+    open_next_file = function() step_file(1) end,
+    open_previous_file = function() step_file(-1) end,
     sync_current_file = sync_current_file,
   }
 end
