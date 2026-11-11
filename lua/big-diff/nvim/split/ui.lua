@@ -81,7 +81,7 @@ end
 
 function M.render_header(window_number, count, hidden_count)
   local width = vim.api.nvim_win_get_width(window_number)
-  local label = width < 32 and 'FILES' or 'CHANGED FILES'
+  local label = width < 16 and 'FILES' or 'CHANGED FILES'
   local hidden = ''
   if hidden_count ~= nil then
     hidden = width < 32 and (' · ' .. hidden_count .. ' hidden')

@@ -59,7 +59,7 @@ end
 
 function M.preferred_width(files, available)
   local groups, names = group_files(files)
-  local width = 36
+  local width = 18
   local directory_padding = vim.fn.strdisplaywidth(' ▾ /  ')
   local file_padding = vim.fn.strdisplaywidth('   ╰ M  ') + 1
   for _, name in ipairs(names) do
@@ -70,8 +70,8 @@ function M.preferred_width(files, available)
       width = math.max(width, vim.fn.strdisplaywidth(filename) + file_padding)
     end
   end
-  -- Leave at least 60% of the original window for code, even on small screens.
-  return math.max(1, math.min(width, 48, math.floor(available * 0.4)))
+  -- Leave at least 80% of the original window for code, even on small screens.
+  return math.max(1, math.min(width, 28, math.floor(available * 0.2)))
 end
 
 function M.layout(files, width)
