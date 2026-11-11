@@ -14,16 +14,37 @@ local function take(text, width, from_end)
   return result
 end
 
-function M.truncate(text, width)
+function M.truncate(text, width, tail_ratio)
   width = math.max(0, width)
   if vim.fn.strdisplaywidth(text) <= width then return text end
   local available = width - vim.fn.strdisplaywidth('…')
   if available < 0 then return '' end
   -- Keep more of the suffix: it usually distinguishes similarly named files,
   -- and includes the extension.
-  local tail = take(text, math.ceil(available * 0.6), true)
+  local tail = take(text, math.ceil(available * (tail_ratio or 0.7)), true)
   local head = take(text, available - vim.fn.strdisplaywidth(tail), false)
   return head .. '…' .. tail
+end
+
+-- Truncate paths from the left by whole segments where possible so the leaf
+-- directory stays readable (`…/callback/` instead of `drive_…callback/`).
+function M.truncate_dir(path, width)
+  width = math.max(0, width)
+  local label = path .. '/'
+  if vim.fn.strdisplaywidth(label) <= width then return label end
+  local segments = vim.split(path, '/', { plain = true })
+  if #segments > 1 then
+    local suffix = segments[#segments] .. '/'
+    for i = #segments - 1, 2, -1 do
+      local candidate = '…/' .. table.concat(segments, '/', i) .. '/'
+      if vim.fn.strdisplaywidth(candidate) <= width then return candidate end
+    end
+    local leaf_candidate = '…/' .. suffix
+    if vim.fn.strdisplaywidth(leaf_candidate) <= width then return leaf_candidate end
+    local prefix_w = vim.fn.strdisplaywidth('…/')
+    if width > prefix_w + 2 then return '…/' .. M.truncate(suffix, width - prefix_w, 0.75) end
+  end
+  return M.truncate(label, width, 0.75)
 end
 
 local status_highlights = {
@@ -36,6 +57,47 @@ local status_highlights = {
   U = 'BigDiffTreeConflict',
   ['?'] = 'BigDiffUntracked',
 }
+
+local function common_dir_prefix(names)
+  if #names < 2 then return nil end
+  local shared
+  for _, name in ipairs(names) do
+    if name == '.' then return nil end
+    local parts = vim.split(name, '/', { plain = true })
+    if not shared then
+      shared = parts
+    else
+      local limit = math.min(#shared, #parts)
+      local matched = 0
+      for i = 1, limit do
+        if shared[i] ~= parts[i] then break end
+        matched = i
+      end
+      if matched == 0 then return nil end
+      for i = #shared, matched + 1, -1 do
+        shared[i] = nil
+      end
+    end
+  end
+  if not shared or #shared == 0 then return nil end
+  local prefix = table.concat(shared, '/')
+  -- Keep at least a non-empty relative label on every group; if one group IS
+  -- the shared directory itself, step up one level when possible.
+  for _, name in ipairs(names) do
+    if name == prefix then
+      if #shared == 1 then return nil end
+      shared[#shared] = nil
+      return table.concat(shared, '/')
+    end
+  end
+  return prefix
+end
+
+local function display_dir_name(name, root_prefix)
+  if not root_prefix then return name end
+  if name:sub(1, #root_prefix + 1) == root_prefix .. '/' then return name:sub(#root_prefix + 2) end
+  return name
+end
 
 local function group_files(files)
   local groups, names = {}, {}
@@ -54,17 +116,17 @@ local function group_files(files)
   for _, entries in pairs(groups) do
     table.sort(entries, function(a, b) return a.path < b.path end)
   end
-  return groups, names
+  return groups, names, common_dir_prefix(names)
 end
 
 function M.preferred_width(files, available)
-  local groups, names = group_files(files)
+  local groups, names, root_prefix = group_files(files)
   local width = 18
-  local directory_padding = vim.fn.strdisplaywidth(' ▾ /  ')
-  local file_padding = vim.fn.strdisplaywidth('   ╰ M  ') + 1
+  local directory_padding = vim.fn.strdisplaywidth('▾ /  ')
+  local file_padding = vim.fn.strdisplaywidth('  M ') + 1
   for _, name in ipairs(names) do
-    width =
-      math.max(width, vim.fn.strdisplaywidth(vim.fn.strtrans(name)) + #tostring(#groups[name]) + directory_padding)
+    local dir_label = vim.fn.strtrans(display_dir_name(name, root_prefix))
+    width = math.max(width, vim.fn.strdisplaywidth(dir_label) + #tostring(#groups[name]) + directory_padding)
     for _, entry in ipairs(groups[name]) do
       local filename = vim.fn.strtrans(vim.fn.fnamemodify(entry.path, ':t'))
       width = math.max(width, vim.fn.strdisplaywidth(filename) + file_padding)
@@ -75,8 +137,8 @@ function M.preferred_width(files, available)
 end
 
 function M.layout(files, width)
-  local groups, names = group_files(files)
-  local result = { lines = {}, rows = {}, groups = {}, line_to_file_index = {} }
+  local groups, names, root_prefix = group_files(files)
+  local result = { lines = {}, rows = {}, groups = {}, line_to_file_index = {}, common_prefix = root_prefix }
 
   local function add(line, row)
     if vim.fn.strdisplaywidth(line) > width then line = take(line, math.max(0, width), false) end
@@ -89,16 +151,17 @@ function M.layout(files, width)
   end
 
   for _, name in ipairs(names) do
-    if #result.lines > 0 then add('', { highlights = {} }) end
     local entries = groups[name]
     local count = tostring(#entries)
-    local prefix = ' ▾ '
-    local label = M.truncate(vim.fn.strtrans(name .. '/'), width - vim.fn.strdisplaywidth(prefix) - #count - 3)
+    local prefix = '▾ '
+    local dir_label = vim.fn.strtrans(display_dir_name(name, root_prefix))
+    local label = M.truncate_dir(dir_label, width - vim.fn.strdisplaywidth(prefix) - #count - 2)
     local left = prefix .. label
     local padding = string.rep(' ', math.max(1, width - vim.fn.strdisplaywidth(left) - #count - 1))
     local line = left .. padding .. count .. ' '
     local count_col = #left + #padding
     local group = { path = name, first = #result.lines + 1 }
+    local leaf_dir = vim.fn.fnamemodify(name, ':t')
     add(line, {
       path = name,
       highlights = {
@@ -107,18 +170,23 @@ function M.layout(files, width)
       },
     })
 
-    for index, entry in ipairs(entries) do
-      local guide = index == #entries and '   ╰ ' or '   │ '
-      local file_prefix = guide .. entry.status .. '  '
+    for _, entry in ipairs(entries) do
+      local indent = '  '
+      local file_prefix = indent .. entry.status .. ' '
       local filename = vim.fn.strtrans(vim.fn.fnamemodify(entry.path, ':t'))
-      local display = M.truncate(filename, width - vim.fn.strdisplaywidth(file_prefix) - 1)
+      -- When filenames repeat the folder name (`notification_handler.go` in
+      -- `notification/`), keep even more of the suffix so the distinguishing
+      -- part survives narrow widths.
+      local tail_ratio = (leaf_dir ~= '' and leaf_dir ~= '.' and filename:sub(1, #leaf_dir + 1) == leaf_dir .. '_')
+          and 0.8
+        or 0.7
+      local display = M.truncate(filename, width - vim.fn.strdisplaywidth(file_prefix), tail_ratio)
       add(file_prefix .. display, {
         path = entry.path,
         file_index = entry.index,
         filename_col = #file_prefix,
         highlights = {
-          { 0, #guide, 'BigDiffTreeGuide' },
-          { #guide, #guide + #entry.status, status_highlights[entry.status] or 'BigDiffTreeModified' },
+          { #indent, #indent + #entry.status, status_highlights[entry.status] or 'BigDiffTreeModified' },
           { #file_prefix, #file_prefix + #display, 'BigDiffTreeFile' },
         },
       })

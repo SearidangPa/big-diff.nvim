@@ -79,21 +79,32 @@ function M.create_split_buffer(files)
   return buffer_number, window_number
 end
 
-function M.render_header(window_number, count, hidden_count)
+function M.render_header(window_number, count, hidden_count, common_prefix)
   local width = vim.api.nvim_win_get_width(window_number)
-  local label = width < 16 and 'FILES' or 'CHANGED FILES'
+  local count_str = tostring(count)
+  local label = (hidden_count ~= nil or width < 16) and 'FILES' or 'CHANGED FILES'
   local hidden = ''
   if hidden_count ~= nil then
     hidden = width < 32 and (' · ' .. hidden_count .. ' hidden')
       or (' · ' .. hidden_count .. (hidden_count == 1 and ' test hidden' or ' tests hidden'))
   end
+  local prefix = ''
+  if common_prefix and hidden_count == nil then
+    local budget = width - #count_str - 3
+    if budget >= 6 then
+      label = ''
+      local display = tree.truncate_dir(vim.fn.strtrans(common_prefix), budget)
+      prefix = display:gsub('%%', '%%%%')
+    end
+  end
   vim.wo[window_number].winbar = table.concat({
     '%#BigDiffTreeHeader# ',
     label,
+    prefix,
     '%#BigDiffTestsHidden#',
     hidden,
     '%#BigDiffTreeCount#%=',
-    tostring(count),
+    count_str,
     ' ',
   })
 end
@@ -139,7 +150,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win,
       vim.api.nvim_buf_set_extmark(buffer_number, current_line_ns, current_line - 1, 0, {
         line_hl_group = 'BigDiffTreeCurrent',
         virt_text = { { '›', 'BigDiffTreeCurrentFile' } },
-        virt_text_win_col = 1,
+        virt_text_win_col = 0,
         virt_text_pos = 'overlay',
         hl_mode = 'combine',
         priority = 210,
@@ -178,7 +189,7 @@ function M.render_files(buffer_number, window_number, files, git_root, main_win,
     vim.api.nvim_buf_set_lines(buffer_number, 0, -1, false, layout.lines)
     vim.bo[buffer_number].modifiable = false
     apply_line_highlights()
-    M.render_header(window_number, #files, hidden_count)
+    M.render_header(window_number, #files, hidden_count, layout.common_prefix)
 
     vim.api.nvim_win_call(window_number, function()
       vim.cmd('silent! normal! zE')

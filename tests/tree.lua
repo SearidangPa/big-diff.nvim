@@ -122,7 +122,7 @@ local ok, err = xpcall(function()
 
   test('preserves full filenames and extensions when they fit', function()
     local layout = tree.layout({ 'notification/notification_handler_share.go' }, 48)
-    eq('   ╰ M  notification_handler_share.go', layout.lines[2])
+    eq('  M notification_handler_share.go', layout.lines[2])
     eq('notification/', layout.lines[1]:match('▾ (.-)%s+1'))
   end)
 
@@ -132,15 +132,36 @@ local ok, err = xpcall(function()
     assert(short:find('…', 1, true), short)
     assert(short:match('share%.go$'), short)
     eq(22, vim.fn.strdisplaywidth(short))
+    eq('…/callback/', tree.truncate_dir('cloud-drive/drive_interface/callback', 16))
+    eq('…/b/callback/', tree.truncate_dir('alpha/b/callback', 14))
+  end)
+
+  test('factors out shared directory prefixes and keeps leaf paths when nested', function()
+    local shared = {
+      { path = 'cloud-drive/drive_interface/callback/notify_move.go', status = 'M' },
+      { path = 'cloud-drive/drive_interface/notification/notification_hard_fail.go', status = 'M' },
+      { path = 'cloud-drive/drive_interface/request_handler/request_observability.go', status = 'A' },
+    }
+    local layout = tree.layout(shared, 24)
+    eq('cloud-drive/drive_interface', layout.common_prefix)
+    eq('callback/', layout.lines[1]:match('▾ (.-)%s+1'))
+    eq('notification/', layout.lines[3]:match('▾ (.-)%s+1'))
+    eq('request_handler/', layout.lines[5]:match('▾ (.-)%s+1'))
+    assert(layout.lines[4]:match('hard_fail%.go$'), layout.lines[4])
+    -- When one group IS a parent of another, keep a non-empty relative path.
+    local nested = tree.layout({ 'pkg/sub/a.go', 'pkg/sub/inner/b.go' }, 28)
+    eq('pkg', nested.common_prefix)
+    eq('sub/', nested.lines[1]:match('▾ (.-)%s+1'))
+    eq('sub/inner/', nested.lines[3]:match('▾ (.-)%s+1'))
   end)
 
   test('uses full parent paths, deterministic ordering, and dense line mappings', function()
     local layout = tree.layout(files, 48)
     eq('client/notification', layout.groups[1].path)
     eq('server/notification', layout.groups[2].path)
-    eq({ false, 2, false, false, 4, 1, 3, 5 }, layout.line_to_file_index)
+    eq({ false, 2, false, 4, 1, 3, 5 }, layout.line_to_file_index)
     eq(#layout.lines, #layout.line_to_file_index)
-    eq('   │ ?  new_observer.go', layout.lines[5])
+    eq('  ? new_observer.go', layout.lines[4])
   end)
 
   test('handles unicode, combining characters, control characters, and tiny widths', function()
@@ -218,6 +239,14 @@ local ok, err = xpcall(function()
       local header = vim.api.nvim_eval_statusline(vim.wo[f.win].winbar, { winid = f.win }).str
       assert(header:find('CHANGED FILES', 1, true))
       assert(header:find('5', 1, true))
+    end)
+    with_tree({
+      { path = 'cloud-drive/drive_interface/callback/notify_rename_or_move.go', status = 'M' },
+      { path = 'cloud-drive/drive_interface/drivehttp/call_test.go', status = 'M' },
+    }, 'cloud-drive/drive_interface/callback/notify_rename_or_move.go', function(f)
+      local header = vim.api.nvim_eval_statusline(vim.wo[f.win].winbar, { winid = f.win }).str
+      assert(header:find('drive_interface/', 1, true), header)
+      assert(header:find('2', 1, true), header)
     end)
   end)
 
