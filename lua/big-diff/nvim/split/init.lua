@@ -271,6 +271,41 @@ function M.toggle_exclude_tests()
   vim.notify(state.exclude_tests and 'Hiding test files' or 'Showing test files', vim.log.levels.INFO)
 end
 
+---Re-reads the changed files against the current base and redraws the file
+---tree, keeping the main window's file, the tree's visibility and focus.
+function M.refresh()
+  if not M.is_open() then return end
+
+  local session_id = state.session_id
+  git.get_diff_files(state.base, function(files, git_root)
+    if state.session_id ~= session_id then return end
+
+    if #files == 0 then
+      vim.notify('No changes in diff', vim.log.levels.INFO)
+      M.close()
+      return
+    end
+
+    state.all_files = files
+    state.git_root = git_root or state.git_root
+
+    local previous_win = vim.api.nvim_get_current_win()
+    local was_in_tree = previous_win == state.window_number
+    local was_visible = is_file_tree_visible()
+    M.hide_file_tree()
+    render_file_tree()
+    if not was_visible then M.hide_file_tree() end
+
+    if was_in_tree and is_file_tree_visible() then
+      vim.api.nvim_set_current_win(state.window_number)
+    elseif vim.api.nvim_win_is_valid(previous_win) then
+      vim.api.nvim_set_current_win(previous_win)
+    elseif state.main_win and vim.api.nvim_win_is_valid(state.main_win) then
+      vim.api.nvim_set_current_win(state.main_win)
+    end
+  end, { git_root = state.git_root })
+end
+
 function M.close()
   if not M.is_open() then return end
 

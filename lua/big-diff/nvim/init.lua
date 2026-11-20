@@ -160,6 +160,11 @@ MiniDiff.setup = function(config)
     desc = 'Open a split diff against a ref, HEAD~N, `commit` (HEAD~1), or a GitHub PR URL; no argument toggles',
   })
 
+  vim.api.nvim_create_user_command('DiffRefresh', function()
+    MiniDiff.refresh()
+    require('big-diff.nvim.split').refresh()
+  end, { nargs = 0, desc = 'Reload inline diff references and the split view file list' })
+
   -- Register decoration provider
   H.viz.set_decoration_provider(H.state.ns_id.viz, H.state.ns_id.overlay)
 
@@ -333,6 +338,23 @@ MiniDiff.toggle = function(buf_id)
   buf_id = H.val.validate_buf_id(buf_id)
   if H.state.cache[buf_id] ~= nil then return MiniDiff.disable(buf_id) end
   return MiniDiff.enable(buf_id)
+end
+
+-- Reload the reference text of one enabled buffer, or of all of them, by
+-- re-attaching the active source. Picks up commits, checkouts and index
+-- changes that the source's own watchers missed.
+MiniDiff.refresh = function(buf_id)
+  local buf_ids = buf_id ~= nil and { H.val.validate_buf_id(buf_id) } or vim.tbl_keys(H.state.cache)
+  for _, id in ipairs(buf_ids) do
+    local buf_cache = H.state.cache[id]
+    if buf_cache ~= nil and vim.api.nvim_buf_is_valid(id) then
+      local active_source = buf_cache.source[buf_cache.source_id] or {}
+      pcall(active_source.detach, id)
+      H.vim.invalidate_buf_text_cache(id)
+      buf_cache.buf_text_hash = nil
+      if active_source.attach == nil or active_source.attach(id) == false then MiniDiff.fail_attach(id) end
+    end
+  end
 end
 
 MiniDiff.toggle_overlay = function()

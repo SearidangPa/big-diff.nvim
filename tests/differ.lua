@@ -10,6 +10,7 @@ local url = 'https://github.com/PreVeil/drive/pull/1944'
 local opened, messages, calls, scenario, checkout
 local count = 0
 local view_session, view_open = 0, false
+local view_refreshes = 0
 
 local function eq(expected, actual)
   assert(vim.deep_equal(expected, actual), 'expected ' .. vim.inspect(expected) .. ', got ' .. vim.inspect(actual))
@@ -40,6 +41,7 @@ package.preload['big-diff.nvim.split'] = function()
     close = function()
       view_session, view_open = view_session + 1, false
     end,
+    refresh = function() view_refreshes = view_refreshes + 1 end,
     get_session_id = function() return view_session end,
     is_open = function() return view_open end,
   }
@@ -165,6 +167,14 @@ local ok, err = xpcall(function()
     vim.cmd('Diff commit')
     vim.cmd('Diff 3')
     eq({ 'HEAD~1', 'HEAD~3' }, opened)
+  end)
+
+  test('DiffRefresh refreshes the split view and takes no arguments', function()
+    prepare()
+    eq('0', vim.api.nvim_get_commands({}).DiffRefresh.nargs)
+    local before = view_refreshes
+    vim.cmd('DiffRefresh')
+    eq(before + 1, view_refreshes)
   end)
 
   test('fetches missing non-main base and opens merge-base, not base tip or main', function()

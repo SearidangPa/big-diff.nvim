@@ -58,6 +58,8 @@ Preview styles:
   `origin/main`, a SHA).
 - `:Diff N` - against `HEAD~N`; `:Diff commit` is `HEAD~1`.
 - `:Diff <pr-url>` - against a GitHub PR's actual base (below).
+- `:DiffRefresh` - reload inline diffs in every enabled buffer and, when the
+  split view is open, re-list its changed files against the same base.
 - `:FoldBetweenHunk [context]` - fold unchanged regions.
 
 ## Split view
@@ -90,6 +92,7 @@ split.toggle_main()         -- detected default base branch
 split.toggle_last_commit()  -- HEAD~1
 split.open(base)
 split.close()
+split.refresh()             -- re-list changed files, keep the open file
 split.next_file()
 split.previous_file()
 split.toggle_file_tree()
